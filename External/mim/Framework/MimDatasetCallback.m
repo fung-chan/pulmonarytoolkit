@@ -73,11 +73,32 @@ classdef MimDatasetCallback < handle
                 context = [];
             end
             
-            if nargout > 1
-                [result, ~, output_image] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, obj.Reporting, []);
-            else
-                [result, ~] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, obj.Reporting, []);
+            parameters = [];
+            if ~isempty(varargin)
+                if isa(varargin{end}, 'MimParameters')
+                    parameters = varargin{end};
+                    varargin = varargin(1:end-1);
+                end
             end
+            
+            if nargout > 1
+                [result, ~, output_image] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, parameters, obj.Reporting, []);
+            else
+                [result, ~] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, parameters, obj.Reporting, []);
+            end
+
+            % Simplify output; if only one context requested then only
+            % return that result
+            context_list = fieldnames(result);
+            if numel(context_list) == 1
+                result = result.(context_list{1});
+            end            
+        end
+        
+        function parameter = GetParameter(obj, parameter_name, varargin)
+            % Returns the current value of a parameter
+            
+            parameter = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetParameter(parameter_name, obj.DatasetStack, obj.Reporting);
         end
 
         function image_info = GetImageInfo(obj, varargin)

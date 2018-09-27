@@ -149,7 +149,7 @@ classdef PTKDicomImage < PTKImage
         end
         
         function [value, units] = GetRescaledValue(obj, global_coords)
-            if obj.IsCT
+            if obj.IsCT && CoreCompareUtilities.CompareEnumName(obj.ImageType, PTKImageType.Grayscale)
                 value = obj.GreyscaleToHounsfield(obj.GetVoxel(global_coords));
                 units = obj.RescaleUnits;
             else
@@ -212,7 +212,7 @@ classdef PTKDicomImage < PTKImage
             copy = PTKDicomImage(obj.RawImage, obj.RescaleSlope, obj.RescaleIntercept, obj.VoxelSize, obj.Modality, obj.StudyUid, obj.MetaHeader);
             metaclass = ?PTKDicomImage;
             property_list = metaclass.Properties;
-            for i = 1 : length(property_list);
+            for i = 1 : length(property_list)
                 property = property_list{i};
                 if (~property.Dependent) && (~property.Constant)
                     copy.(property.Name) = obj.(property.Name);
@@ -224,7 +224,7 @@ classdef PTKDicomImage < PTKImage
             copy = PTKDicomImage([], obj.RescaleSlope, obj.RescaleIntercept, obj.VoxelSize, obj.Modality, obj.StudyUid, obj.MetaHeader);
             metaclass = ?PTKDicomImage;
             property_list = metaclass.Properties;
-            for i = 1 : length(property_list);
+            for i = 1 : length(property_list)
                 property = property_list{i};
                 if (~property.Dependent) && (~property.Constant) && (~strcmp(property.Name, 'RawImage'))
                     copy.(property.Name) = obj.(property.Name);
@@ -235,7 +235,7 @@ classdef PTKDicomImage < PTKImage
         function is_equal = eq(obj, other)
             metaclass = ?PTKImage;
             property_list = metaclass.Properties;
-            for i = 1 : length(property_list);
+            for i = 1 : length(property_list)
                 property = property_list{i};
                 if (~property.Dependent) && (~ismember(property.Name, obj.PropertiesToIgnoreOnComparison))
                     if ~isequal(other.(property.Name), obj.(property.Name))

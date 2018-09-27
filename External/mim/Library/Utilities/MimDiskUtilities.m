@@ -16,6 +16,7 @@ classdef MimDiskUtilities
             filespec = {...
                 '*.tif', 'TIF (*.tif)';
                 '*.jpg', 'JPG (*.jpg)';
+                '*.png', 'PNG (*.png)';
                 };
             
             if isempty(path_name) || ~ischar(path_name) || exist(path_name, 'dir') ~= 7
@@ -28,6 +29,8 @@ classdef MimDiskUtilities
                     save_type = 'tif';
                 case 2
                     save_type = 'jpg';
+                case 3
+                    save_type = 'png';
                 otherwise
                     save_type = [];
             end
@@ -75,7 +78,7 @@ classdef MimDiskUtilities
                 end
             end
             
-            for index = 1 : length(meta_header_data{1});
+            for index = 1 : length(meta_header_data{1})
                 meta_header.(genvarname(meta_header_data{1}{index})) = meta_header_data{2}{index};
             end
         end
@@ -106,6 +109,9 @@ classdef MimDiskUtilities
             if isempty(filename)
                 reporting.Error('MimDiskUtilities:NoSettingsFilename', 'The file could not be saved as the specified filename was empty.');
             else
+                if ~isstruct(value)
+                    reporting.Error('MimDiskUtilities:NotAStruct', 'The file could not be saved as the variable was not in a structure.');
+                end
                 save(filename, '-struct', 'value', '-v7');
             end
         end
@@ -124,7 +130,7 @@ classdef MimDiskUtilities
 
         function SaveImageCapture(capture, file_name, save_type, reporting)
             reporting.ShowProgress('Exporting image');
-            if isa(file_name, 'CoreFilename');
+            if isa(file_name, 'CoreFilename')
                 file_name = file_name.FullFile;
             end
             switch save_type
@@ -132,6 +138,8 @@ classdef MimDiskUtilities
                     imwrite(capture.cdata, file_name, 'tif');
                 case 'jpg'
                     imwrite(capture.cdata, file_name, 'jpg', 'Quality', 70);
+                case 'png'
+                    imwrite(capture.cdata, file_name, 'png', 'Software', 'TD Pulmonary Toolkit');
                 otherwise
                     reporting.Error('MimDiskUtilities:SaveImageCapture:UnknownImageType', ['SaveImageCapture() does not support the image type ', save_type]);
             end

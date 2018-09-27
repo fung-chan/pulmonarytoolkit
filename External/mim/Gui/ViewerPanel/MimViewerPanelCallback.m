@@ -65,8 +65,10 @@ classdef MimViewerPanelCallback < CoreBaseClass
             obj.AddEventListener(obj.ViewerPanel.GetOverlayImageSource, 'ImageModified', @obj.OverlayImageChangedCallback);
             obj.AddEventListener(obj.ViewerPanel.GetQuiverImageSource, 'ImageModified', @obj.QuiverImageChangedCallback);
 
+            obj.Tools.UpdateTools();
+            
             % Status update should be done post-creation
-            obj.UpdateStatus;
+            obj.UpdateStatus();
         end
         
     end
@@ -151,7 +153,7 @@ classdef MimViewerPanelCallback < CoreBaseClass
             % Change the cursor
             obj.ViewerPanelMultiView.UpdateCursor(obj.ViewerPanel.GetParentFigure.GetContainerHandle, [], []);
             
-            obj.Tools.UpdateTools;
+            obj.Tools.UpdateTools();
         end
         
         function OverlayTransparencyChangedCallback(obj, ~, ~, ~)
@@ -319,7 +321,7 @@ classdef MimViewerPanelCallback < CoreBaseClass
                     voxel_value = main_image.GetVoxel(global_coords);
                     [rescale_value, rescale_units] = main_image.GetRescaledValue(global_coords);
                     
-                    if isempty(overlay_image) || ~overlay_image.ImageExists || ~overlay_image.IsPointInImage(global_coords);
+                    if isempty(overlay_image) || ~overlay_image.ImageExists || ~overlay_image.IsPointInImage(global_coords)
                         overlay_value = [];
                     else
                         overlay_value = overlay_image.GetVoxel(global_coords);

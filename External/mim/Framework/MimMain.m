@@ -29,7 +29,7 @@ classdef MimMain < CoreBaseClass
     %     to your image data.
     %
     %         image_info = PTKImageInfo( <image path>, <filenames>, [], [], [], []);
-    %         mim = MimMain;
+    %         mim = MimMain();
     %         dataset = mim.CreateDatasetFromInfo(image_info);
     %
     %     You can then obtain results from this dataset, e.g.
@@ -96,6 +96,9 @@ classdef MimMain < CoreBaseClass
             % the cache but not in the database; this can be fixed by
             % rebuilding the database
             
+            if iscell(dataset_uid_prefix)
+                dataset_uid_prefix = dataset_uid_prefix{1};
+            end
             dataset_exists = (7 == exist(fullfile(obj.FrameworkAppDef.GetFrameworkDirectories.GetFrameworkDatasetCacheDirectory, dataset_uid_prefix), 'dir')) || (7 == exist(fullfile(obj.FrameworkAppDef.GetFrameworkDirectories.GetCacheDirectory, dataset_uid_prefix), 'dir'));
             
             if dataset_exists
@@ -106,7 +109,18 @@ classdef MimMain < CoreBaseClass
                 dataset_uids = all_uids(matches);
             end
         end
-
+        
+        function dataset = Load(obj, filename)
+            % Helper method to import the data from the specified file path and create a MimDataset for the first series found
+            
+            [uids, ~] = obj.ImportData(filename);
+            if isempty(uids)
+                dataset = [];
+            else
+                dataset = obj.CreateDatasetFromUid(uids{1});
+            end
+        end
+        
         function dataset = CreateDatasetFromUid(obj, dataset_uid_prefix)
             % Creates a MimDataset object for a dataset specified by the uid. The
             % dataset must already be imported.
@@ -128,6 +142,8 @@ classdef MimMain < CoreBaseClass
             end
             
             dataset = MimDataset(image_info, dataset_disk_cache, obj.FrameworkSingleton.GetLinkedDatasetChooserMemoryCache, obj.FrameworkSingleton.GetClassFactory, obj.ReportingWithCache);
+
+            obj.AutoLinkDatasets(dataset);
             
             obj.RunCustomPostLoadFunction(dataset_uid, dataset);
         end
@@ -142,15 +158,17 @@ classdef MimMain < CoreBaseClass
 
             dataset = MimDataset(image_info, dataset_disk_cache, obj.FrameworkSingleton.GetLinkedDatasetChooserMemoryCache, obj.FrameworkSingleton.GetClassFactory, obj.ReportingWithCache);
             
+            obj.AutoLinkDatasets(dataset);
+
             obj.RunCustomPostLoadFunction(dataset.GetImageInfo.ImageUid, dataset);
         end
         
-        function uids = ImportDataRecursive(obj, filename)
+        function [uids, patient_ids] = ImportDataRecursive(obj, filename)
             % Identical to ImportData()
-            uids = obj.ImportData(filename);
+            [uids, patient_ids] = obj.ImportData(filename);
         end
         
-        function uids = ImportData(obj, filename)
+        function [uids, patient_ids] = ImportData(obj, filename)
             % Imports data into the TD MIM Toolkit so that it can be accessed
             % from the CreateDatasetFromUid() method. The input argument is a string
             % containing the path to the data file to import. If the path points to
@@ -165,7 +183,7 @@ classdef MimMain < CoreBaseClass
             
             % Adds the files to the image database, which groups them into
             % series
-            uids = obj.FrameworkSingleton.ImportData(filename, obj.ReportingWithCache);
+            [uids, patient_ids] = obj.FrameworkSingleton.ImportData(filename, obj.ReportingWithCache);
             
             % Add the necessary files to the cache
             obj.ImportSeries(uids);
@@ -175,7 +193,7 @@ classdef MimMain < CoreBaseClass
             
             % Tell the image database to fire a database changed event. We do this here
             % rather than during the import to prevent multiple events being fired
-            obj.FrameworkSingleton.ReportChangesToDatabase;
+            obj.FrameworkSingleton.ReportChangesToDatabase();
         end
                 
         function RunCustomPostLoadFunction(obj, dataset_uid, dataset)
@@ -239,10 +257,25 @@ classdef MimMain < CoreBaseClass
                 script_class = feval(script_name);
                 output = script_class.RunScript(obj, obj.Reporting, varargin{:});
             catch ex
-                obj.Reporting.Error('MimMain:ScriptFailure', ['The script ' script_name ' failed with the following error: ' ex.message]);
+                obj.Reporting.ErrorFromException('MimMain:ScriptFailure', ['The script ' script_name ' failed with the following error: ' ex.message], ex);
                 output = [];
             end
         end
+        
+        function AutoLinkDatasets(obj, primary_dataset)
+            linked_recorder = obj.FrameworkSingleton.GetLinkedDatasetRecorder();
+            link_map = linked_recorder.LinkMap;
+            primary_uid = primary_dataset.GetPrimaryDatasetUid();
+            if link_map.isKey(primary_uid)
+               link_record = link_map(primary_uid);
+               link_map = link_record.LinkMap;
+               for uid = link_map.keys
+                   name = link_map(uid{1});
+                   dataset_to_link = obj.CreateDatasetFromUid(uid{1});
+                   primary_dataset.LinkDataset(name, dataset_to_link)
+               end
+            end
+        end        
     end
     
     methods (Access = private)

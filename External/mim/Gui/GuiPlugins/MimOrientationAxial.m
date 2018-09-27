@@ -18,15 +18,15 @@ classdef MimOrientationAxial < MimGuiPlugin
     %    
     
     properties
-        ButtonText = 'Axial View'
-        SelectedText = 'Axial View'
+        ButtonText = 'Axial'
+        SelectedText = 'Axial'
         ToolTip = 'Changes the image orientation to a axial view'
         Category = 'View'
         Visibility = 'Dataset'
         Mode = 'Toolbar'
 
         HidePluginInDisplay = false
-        PTKVersion = '2'
+        PTKVersion = '1'
         ButtonWidth = 6
         ButtonHeight = 1
         Icon = 'axial_thumb.png'

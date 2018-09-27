@@ -12,17 +12,17 @@ classdef MimWebSocketServer < WebSocketServer
         function obj = MimWebSocketServer(port, localModelCallback)
             obj@WebSocketServer(port);
             obj.ConnectionCacheMap = MimConnectionCacheMap();
-            obj.LocalCache = MimLocalModelCache();
+            obj.LocalCache = MimLocalModelCache(localModelCallback);
             obj.LocalModelCallback = localModelCallback;
         end
         
-        function sendBinaryModel(obj, modelName, serverHash, lastClientHash, metaData, payloadType, data)
+        function sendBinaryModel(obj, modelName, serverHash, lastClientHash, payloadType, data)
             % Encodes model metadata and a data matrix into a blob and send
             % to clients. The data array will be sent as an int8 stream; it
             % is the client's responsibility to reconstruct this using the
             % metadata
             
-            blob = MimWebSocketParser.EncodeAsBlob(modelName, serverHash, lastClientHash, metaData, payloadType, data);
+            blob = MimWebSocketParser.EncodeAsBlob(modelName, serverHash, lastClientHash, payloadType, data);
             obj.LogBinaryMessage('Sending', blob);
             obj.sendToAll(blob);
         end
@@ -47,7 +47,7 @@ classdef MimWebSocketServer < WebSocketServer
             if ischar(value) || iscell(value) || isstruct(value)
                 obj.sendTextModel(modelName, localHash, remoteHash, [], MimWebSocketParser.MimPayloadData, value);
             else
-                obj.sendBinaryModel(modelName, localHash, remoteHash, [], MimWebSocketParser.MimPayloadData, value);
+                obj.sendBinaryModel(modelName, localHash, remoteHash, MimWebSocketParser.MimPayloadData, value);
             end
         end
         
@@ -58,7 +58,7 @@ classdef MimWebSocketServer < WebSocketServer
             % Update the local model cache
             localModelCache.modifyCurrentHashAndValue(hash, value);
             
-            for connection = obj.ConnectionCacheMap.getAllConnections
+            for connection = obj.ConnectionCacheMap.getAllConnections()
                 % Get the remote model cache for this connection
                 remoteModelCache = connection{1}.getModelCacheEntry(modelName);
                 
@@ -126,25 +126,29 @@ classdef MimWebSocketServer < WebSocketServer
         function parseMessage(obj, conn, header, metaData, data)
 %             disp(['Blob message received: version:' num2str(header.version) ' software version:' num2str(header.softwareVersion) ' model:' header.modelName ' hash server:' num2str(header.localHash) ' hash last client:' num2str(header.lastRemoteHash) ' value:' data]);
             
-            % Get the remote model cache for this connection
-            remoteModelCache = obj.ConnectionCacheMap.getConnection(conn).getModelCacheEntry(header.modelName);
-            
-            % Get the local model cache
-            localModelCache = obj.LocalCache.getModelCacheEntry(header.modelName);
-            
-            % Update the remote model cache
-            remoteModelCache.updateHashes(header.localHash, header.lastRemoteHash);
-            
-            if isempty(localModelCache.CurrentHash) && isempty(remoteModelCache.CurrentHash)
-                % If the remote has no value then assume it is requesting a
-                % value from our local cache
-                
-                [value, hash] = obj.LocalModelCallback.getValue(header.modelName);
-                obj.updateLocalModelValue(header.modelName, hash, value);
+            if isfield(header, 'modelName')
+                % Get the remote model cache for this connection
+                remoteModelCache = obj.ConnectionCacheMap.getConnection(conn).getModelCacheEntry(header.modelName);
+
+                % Get the local model cache
+                localModelCache = obj.LocalCache.getModelCacheEntry(header.modelName);
+
+                % Update the remote model cache
+                remoteModelCache.updateHashes(header.localHash, header.lastRemoteHash);
+
+                if isempty(localModelCache.CurrentHash) && isempty(remoteModelCache.CurrentHash)
+                    % If the remote has no value then assume it is requesting a
+                    % value from our local cache
+
+                    [value, hash] = obj.LocalModelCallback.getValue(header.modelName);
+                    obj.updateLocalModelValue(header.modelName, hash, value);
+                else
+                    % Update models and trigger synchronisation
+                    payloadType = header.payloadType;
+                    MimModelUpdater.updateModel(localModelCache, MimRemoteModelProxy(obj, header.modelName, data, payloadType, remoteModelCache));
+                end
             else
-                % Update models and trigger synchronisation
-                payloadType = header.payloadType;
-                MimModelUpdater.updateModel(localModelCache, MimRemoteModelProxy(obj, header.modelName, data, payloadType, remoteModelCache));
+                disp('ERROR: Empty model name received');
             end
         end        
     end

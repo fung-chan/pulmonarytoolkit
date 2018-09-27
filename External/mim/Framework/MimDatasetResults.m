@@ -38,7 +38,6 @@ classdef MimDatasetResults < handle
         FrameworkAppDef      % Framework configuration
         ContextHierarchy     % Processes the calls to plugins, performing conversions between contexts where necessary
         DatasetDiskCache     % Reads and writes to the disk cache for this dataset
-        DependencyTracker    % Tracks plugin usage to construct dependency lists 
         Pipelines            % Pipelines which trigger Plugins after other Plugins are called
         ImageTemplates       % Template images for different contexts
         OutputFolder         % Saves files to the output folder
@@ -49,6 +48,8 @@ classdef MimDatasetResults < handle
         
         % A pointer to the object which contains the event to be triggered when a preview thumbnail image has changed
         ExternalNotifyCallback
+        
+        IsGasMri             % Whether this dataset is a gas MRI. Can be manually overridden by SetGasMri
         
     end
     
@@ -63,11 +64,19 @@ classdef MimDatasetResults < handle
             obj.ImageTemplates = MimImageTemplates(framework_app_def, obj, context_def, dataset_disk_cache, obj.Pipelines, reporting);
             obj.OutputFolder = MimOutputFolder(framework_app_def, dataset_disk_cache, image_info, obj.ImageTemplates, reporting);
             obj.PreviewImages = MimPreviewImages(framework_app_def, dataset_disk_cache, reporting);
-            obj.DependencyTracker = MimPluginDependencyTracker(framework_app_def, dataset_disk_cache, plugin_cache);
-            obj.ContextHierarchy = MimContextHierarchy(context_def, dataset_disk_cache, obj.DependencyTracker, obj.ImageTemplates, obj.Pipelines);
+            obj.ContextHierarchy = MimContextHierarchy(context_def, dataset_disk_cache, obj.ImageTemplates, obj.Pipelines, framework_app_def, plugin_cache);
         end
 
-        function [result, cache_info, output_image] = GetResult(obj, plugin_name, dataset_stack, output_context, reporting, allow_results_to_be_cached_override)
+        function parameter = GetParameter(obj, parameter_name, dataset_stack, reporting)
+            try
+                parameter = obj.ContextHierarchy.GetParameter(parameter_name, dataset_stack, reporting);        
+            catch ex
+                dataset_stack.ClearStack;
+                rethrow(ex);
+            end
+        end
+        
+        function [result, cache_info, output_image] = GetResult(obj, plugin_name, dataset_stack, output_context, parameters, reporting, allow_results_to_be_cached_override)
             % Returns the results of a plugin. If a valid result is cached on disk,
             % this wil be returned provided all the dependencies are valid.
             % Otherwise the plugin will be executed and the new result returned.
@@ -77,9 +86,6 @@ classdef MimDatasetResults < handle
             % same as the results.
 
             reporting.PushProgress;
-            if nargin < 4
-                output_context = [];
-            end
             generate_image = nargout > 2;
             
             % Get information about the plugin
@@ -91,7 +97,7 @@ classdef MimDatasetResults < handle
 
             % Whether results can be cached is determined by the plugin
             % parameters, but the input can force this to be enabled
-            if (nargin > 5) && (~isempty(allow_results_to_be_cached_override)) && allow_results_to_be_cached_override
+            if (nargin > 6) && (~isempty(allow_results_to_be_cached_override)) && allow_results_to_be_cached_override
                 disk_cache_policy = MimCachePolicy.Permanent;
             end
 
@@ -117,13 +123,9 @@ classdef MimDatasetResults < handle
 
                 for next_output_context_set = context_list
                     next_output_context = next_output_context_set{1};
-                    combined_result = obj.ContextHierarchy.GetResultRecursive(plugin_name, next_output_context, obj.LinkedDatasetChooser, plugin_info, plugin_class, dataset_uid, dataset_stack, force_generate_image, memory_cache_policy, disk_cache_policy, reporting);
+                    combined_result = obj.ContextHierarchy.GetResultRecursive(plugin_name, next_output_context, parameters, obj.LinkedDatasetChooser, plugin_info, plugin_class, dataset_uid, dataset_stack, force_generate_image, memory_cache_policy, disk_cache_policy, reporting);
                     plugin_has_been_run = plugin_has_been_run | combined_result.GetPluginHasBeenRun;
-                    if numel(context_list) == 1
-                        result = combined_result.GetResult;
-                    else
-                        result.(strrep(char(next_output_context), '.', '_')) = combined_result.GetResult;
-                    end
+                    result.(CoreTextUtilities.CreateValidFieldName(next_output_context)) = combined_result.GetResult();
 
                     % Note for simplicity we return only one output image and
                     % one cache info even if we are requesting multiple
@@ -147,6 +149,12 @@ classdef MimDatasetResults < handle
             end
 
             cache_preview = plugin_info.GeneratePreview && (plugin_has_been_run || ~preview_exists);
+            
+            % Don't attempt to generate a preview if the output is not an
+            % image
+            if ~isa(output_image, 'PTKImage')
+                cache_preview = false;
+            end
             
             % Generate and cache a preview image
             if cache_preview && ~isempty(output_image) && output_image.ImageExists
@@ -229,17 +237,37 @@ classdef MimDatasetResults < handle
             dataset_uid = obj.ImageInfo.ImageUid;
             
             try
-                obj.DependencyTracker.SaveMarkerPoints(name, data, dataset_uid, reporting);            
+                attributes = [];
+                attributes.IgnoreDependencyChecks = false;
+                attributes.IsMarkerSet = true;
+                instance_identifier = PTKDependency(name, [], CoreSystemUtilities.GenerateUid(), dataset_uid, attributes);
+                manual_cache_info = obj.FrameworkAppDef.GetClassFactory.CreateDatasetStackItem(instance_identifier, PTKDependencyList(), false, false, reporting);
+                manual_cache_info.MarkMarkerSet();
+                
+                obj.DatasetDiskCache.SaveMarkerPoints(name, data, manual_cache_info, reporting);
+                
             catch ex
                 dataset_stack.ClearStack;
                 rethrow(ex);
             end
         end
         
-        function data = LoadMarkerPoints(obj, name, dataset_stack, reporting)
+        function result = LoadMarkerPoints(obj, name, dataset_stack, reporting)
             % Load data from a cache file associated with this dataset
         
-            data = obj.DependencyTracker.LoadMarkerPoints(name, dataset_stack, reporting);
+            [result, cache_info] = obj.DatasetDiskCache.LoadMarkerPoints(name, reporting);
+
+            % Add the dependencies of the cache to any other
+            % plugins in the callstack
+            if ~isempty(result) && ~isempty(cache_info)
+                dependencies = cache_info.DependencyList;
+                dataset_stack.AddDependenciesToAllPluginsInStack(dependencies, reporting);
+
+                dependency = cache_info.InstanceIdentifier;
+                dependency_list_for_this_plugin = PTKDependencyList();
+                dependency_list_for_this_plugin.AddDependency(dependency, reporting);
+                dataset_stack.AddDependenciesToAllPluginsInStack(dependency_list_for_this_plugin, reporting);
+            end
         end
         
         function SaveManualSegmentation(obj, name, data, dataset_stack, reporting)
@@ -248,7 +276,15 @@ classdef MimDatasetResults < handle
             dataset_uid = obj.ImageInfo.ImageUid;
             
             try
-                obj.DependencyTracker.SaveManualSegmentation(name, data, dataset_uid, reporting);
+                attributes = [];
+                attributes.IgnoreDependencyChecks = false;
+                attributes.IsManualSegmentation = true;
+                instance_identifier = PTKDependency(name, [], CoreSystemUtilities.GenerateUid(), dataset_uid, attributes);
+                manual_cache_info = obj.FrameworkAppDef.GetClassFactory.CreateDatasetStackItem(instance_identifier, PTKDependencyList(), false, false, reporting);
+                manual_cache_info.MarkManual();
+
+                obj.DatasetDiskCache.SaveManualSegmentation(name, data, manual_cache_info, reporting);
+                
             catch ex
                 dataset_stack.ClearStack;
                 rethrow(ex);
@@ -258,7 +294,19 @@ classdef MimDatasetResults < handle
         function data = LoadManualSegmentation(obj, name, dataset_stack, reporting)
             % Load data from a cache file associated with this dataset
         
-            data = obj.DependencyTracker.LoadManualSegmentation(name, dataset_stack, reporting);
+            [data, cache_info] = obj.DatasetDiskCache.LoadManualSegmentation(name, reporting);
+
+            % Add the dependencies of the manual segmentation cache to any other
+            % plugins in the callstack
+            if ~isempty(data) && ~isempty(cache_info)
+                dependencies = cache_info.DependencyList;
+                dataset_stack.AddDependenciesToAllPluginsInStack(dependencies, reporting);
+
+                dependency = cache_info.InstanceIdentifier;
+                dependency_list_for_this_plugin = PTKDependencyList();
+                dependency_list_for_this_plugin.AddDependency(dependency, reporting);
+                dataset_stack.AddDependenciesToAllPluginsInStack(dependency_list_for_this_plugin, reporting);
+            end
         end
         
         function edited_result = GetDefaultEditedResult(obj, plugin_name, dataset_stack, context, reporting)
@@ -279,7 +327,8 @@ classdef MimDatasetResults < handle
             reporting.UpdateProgressMessage(['Computing ' plugin_info.ButtonText]);
             
             % Run the plugin
-            edited_result = obj.DependencyTracker.GetDefaultEditedResult(context, obj.LinkedDatasetChooser, plugin_class, dataset_stack, reporting);
+            dataset_callback = MimDatasetCallback(obj.LinkedDatasetChooser, dataset_stack, context, reporting);
+            edited_result = plugin_class.GenerateDefaultEditedResultFollowingFailure(dataset_callback, context, reporting);
             
             reporting.CompleteProgress;
             
@@ -307,7 +356,7 @@ classdef MimDatasetResults < handle
         function file_list = GetListOfManualSegmentations(obj)
             % Gets list of manual segmentation files associated with this dataset
 
-            file_list = obj.DatasetDiskCache.GetListOfManualSegmentations;
+            file_list = obj.DatasetDiskCache.GetListOfManualSegmentations();
         end
 
         function file_list = GetListOfMarkerSets(obj)
@@ -415,22 +464,33 @@ classdef MimDatasetResults < handle
         % ToDo: This check is based on series description and should be more
         % general
         function is_gas_mri = IsGasMRI(obj, dataset_stack, reporting)
-            is_gas_mri = false;
-            if ~strcmp(obj.GetImageInfo.Modality, 'MR')
-                return;
+            if ~isempty(obj.IsGasMri)
+                is_gas_mri = obj.IsGasMri;
             else
-                template = obj.GetTemplateImage(obj.FrameworkAppDef.GetContextDef.GetOriginalDataContext, dataset_stack, reporting);
-                if ~isfield(template.MetaHeader, 'ReceiveCoilName')
-                    return;
+                is_gas_mri = false;
+                if strcmp(obj.GetImageInfo.Modality, 'MR')
+                    template = obj.GetTemplateImage(obj.FrameworkAppDef.GetContextDef.GetOriginalDataContext, dataset_stack, reporting);
+                    if isfield(template.MetaHeader, 'ReceiveCoilName')
+                        if strcmpi(template.MetaHeader.ReceiveCoilName, 'MNS 129Xe TR')
+                            is_gas_mri = true;
+                        end
+                    end
                 end
-                if strcmpi(template.MetaHeader.ReceiveCoilName, 'MNS 129Xe TR')
-                    is_gas_mri = true;
-                end
+                obj.IsGasMri = is_gas_mri;
             end
+        end
+        
+        function SetGasMri(obj, is_gas_mri)
+            % Manually sets this dataset to be gas MRI. This overrides the heuristics.
+            % Note this setting does not persist and must be set every time the dataset is created
+            if nargin < 2
+                is_gas_mri = true;
+            end
+            obj.IsGasMri = is_gas_mri;
         end
 
         function [valid, edited_result_exists] = CheckDependencyValid(obj, next_dependency, reporting)
-            [valid, edited_result_exists] = obj.DependencyTracker.CheckDependencyValid(next_dependency, reporting);
+            [valid, edited_result_exists] = obj.ContextHierarchy.CheckDependencyValid(next_dependency, reporting);
         end
 
         function SaveTableAsCSV(obj, plugin_name, subfolder_name, file_name, description, table, file_dim, row_dim, col_dim, filters, dataset_stack, reporting)

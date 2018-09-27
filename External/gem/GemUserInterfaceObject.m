@@ -31,6 +31,8 @@ classdef GemUserInterfaceObject < CoreBaseClass
         LastHandleVisible  % Stores the last visibility state set to the handle of the graphics component
         
         VisibleParameter = 'on' % Defines the argument for component visibility
+        
+        Hg2Permitted
     end
     
     properties (Access = protected)        
@@ -72,11 +74,12 @@ classdef GemUserInterfaceObject < CoreBaseClass
             obj.ComponentHasBeenCreated = false;
             obj.Children = [];
             obj.ResizeRequired = false;
-            obj.LockResize = false;            
+            obj.LockResize = false;
+            obj.Hg2Permitted = obj.IsHg2Permitted();
         end
         
         function delete(obj)
-            obj.RemoveAndDeleteChildren
+            obj.RemoveAndDeleteChildren();
             obj.DeleteIfGraphicsHandle(obj.GraphicalComponentHandle);
         end
         
@@ -285,7 +288,14 @@ classdef GemUserInterfaceObject < CoreBaseClass
                 reordered_handles = [other_handles; handle_for_bottom];
                 set(obj.GraphicalComponentHandle, 'Children', reordered_handles);
             end
-        end        
+        end
+
+        function SetContextMenu(obj, context_menu)
+            if obj.ComponentHasBeenCreated && ishandle(obj.GraphicalComponentHandle)
+                set(obj.GraphicalComponentHandle, 'uicontextmenu', context_menu);
+                obj.GraphicalComponentHandle.UIContextMenu = context_menu;
+            end
+        end
     end
 
     methods (Access = protected)
@@ -531,15 +541,26 @@ classdef GemUserInterfaceObject < CoreBaseClass
             % See here for more information: http://undocumentedmatlab.com/blog/enabling-user-callbacks-during-zoom-pan
             
             hManager = uigetmodemanager(obj.GetParentFigure.GetContainerHandle);
-            try
-                % This code should work with Matlab hg1 but will throw
-                % an exception in Matlab hg2
-                set(hManager.WindowListenerHandles, 'Enable', 'off');
-            catch
-                % This code should work with Matlab hg2
-                [hManager.WindowListenerHandles.Enabled] = deal(false);
+            
+            if obj.Hg2Permitted
+                try
+                    % This code should work with Matlab hg2
+                    [hManager.WindowListenerHandles.Enabled] = deal(false);
+                catch
+                    % This code should work with Matlab hg1 but will throw
+                    % an exception in Matlab hg2
+                    set(hManager.WindowListenerHandles, 'Enable', 'off');
+                end
+            else
+                try
+                    % This code should work with Matlab hg1 but will throw
+                    % an exception in Matlab hg2
+                    set(hManager.WindowListenerHandles, 'Enable', 'off');
+                catch
+                    % This code should work with Matlab hg2
+                    [hManager.WindowListenerHandles.Enabled] = deal(false);
+                end
             end
-
         end
         
         function ClearCallbacks(obj)
@@ -638,7 +659,7 @@ classdef GemUserInterfaceObject < CoreBaseClass
         function input_has_been_processed = MatlabScroll(obj, click_point, scroll_count, src, eventdata)
             % Let Matlab callbacks process this scroll event
             
-            if ~isempty(obj.WindowScrollWheelFcn)
+            if ~isempty(obj.WindowScrollWheelFcn) && iscell(obj.WindowScrollWheelFcn)
                 obj.WindowScrollWheelFcn{1}(src, eventdata, obj.WindowScrollWheelFcn{2:end});
                 input_has_been_processed = true;
                 return
@@ -647,6 +668,27 @@ classdef GemUserInterfaceObject < CoreBaseClass
             input_has_been_processed = false;
         end
         
+        function is_running = IsCurrentlyRunning(obj)
+            % Returns true if the calling function is currently executing.
+            % Used to stop callback reentrancy. This uses the debug stack
+            % rather than a flag, since a flag may not be cleared if the
+            % program exeution terminates through a dbquit
+
+            db_stack = dbstack();
+            if numel(db_stack) > 2
+                calling_func_name = db_stack(2).name;
+                if any(strcmp(calling_func_name, {db_stack(3:end).name}))
+                    is_running = true;
+                    return;
+                end
+            end
+            is_running = false;
+        end
+        
+        function is_hg2 = IsHg2Permitted(obj)
+            % Returns true if HG2 is supported
+            is_hg2 = ~verLessThan('matlab','8.4.0');
+        end
     end
     
     methods (Access = private)

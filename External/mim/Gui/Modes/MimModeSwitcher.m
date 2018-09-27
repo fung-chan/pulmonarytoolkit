@@ -47,18 +47,26 @@ classdef MimModeSwitcher < CoreBaseClass
         end
         
         function SwitchMode(obj, mode, current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context, current_segmentation_name)
+            if ~strcmp(mode, obj.CurrentModeString)
+                if ~isempty(obj.CurrentMode)
+                    obj.CurrentMode.ExitMode();
+                end
+                obj.CurrentModeString = mode;
+                if isempty(mode)
+                    obj.CurrentMode = [];
+                    obj.ViewerPanel.SetModes([], []);
+                else
+                    obj.CurrentMode = obj.Modes(mode);
+                    obj.CurrentMode.EnterMode(current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context, current_segmentation_name);
+                end
+                notify(obj, 'ModeChangedEvent', CoreEventData(mode));
+            end
+        end
+        
+        function ModeAutoSave(obj)
             if ~isempty(obj.CurrentMode)
-                obj.CurrentMode.ExitMode;
+                obj.CurrentMode.AutoSave();
             end
-            obj.CurrentModeString = mode;
-            if isempty(mode)
-                obj.CurrentMode = [];
-                obj.ViewerPanel.SetModes([], []);
-            else
-                obj.CurrentMode = obj.Modes(mode);
-                obj.CurrentMode.EnterMode(current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context, current_segmentation_name);
-            end
-            notify(obj, 'ModeChangedEvent', CoreEventData(mode));
         end
         
         function PrePluginCall(obj)
@@ -72,12 +80,21 @@ classdef MimModeSwitcher < CoreBaseClass
             end            
         end
         
-        function UpdateMode(obj, current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context)
-            if ~isempty(obj.CurrentMode)
-                obj.CurrentMode.ExitMode;
+        function UpdateCurrentMode(obj, current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context)
+            if ~isempty(obj.CurrentMode) 
+                obj.CurrentMode.ExitMode();
                 if obj.CurrentMode.AllowAutomaticModeEntry
                     obj.CurrentMode.EnterMode(current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context);
                 else
+                    obj.SwitchMode([], current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context);
+                end
+            end
+        end
+        
+        function ViewerPanelModeChanged(obj, new_mode, current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context)
+            if ~isempty(obj.CurrentMode)
+                if obj.CurrentMode.ExitOnViewerPanelModeChanged(new_mode)
+                    obj.CurrentMode.ExitMode();
                     obj.SwitchMode([], current_dataset, current_plugin_info, current_plugin_name, current_visible_plugin_name, current_context);
                 end
             end

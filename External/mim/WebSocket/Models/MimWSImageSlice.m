@@ -1,45 +1,21 @@
-classdef MimWSImageSlice < MimWSModel
-    properties
-        Image
-        AxialDimension
-        ImageSliceNumber
-        Hash
-        ParentView
-        ImageType
-    end
-
-    methods
-        function obj = MimWSImageSlice(mim, modelUid, parameters)
-            obj = obj@MimWSModel(mim, modelUid, parameters);
-            obj.Image = parameters.imageHandle;
-            obj.ImageType = parameters.imageType;
-            obj.ImageSliceNumber = parameters.imageSliceNumber;
-            obj.AxialDimension = parameters.axialDimension;
-            obj.ParentView = parameters.parentView;
-            obj.Hash = 0;
-        end
-        
-        function [value, hash] = getValue(obj, modelList)
-            obj.Hash = obj.Hash + 1;
-            value = obj.Image.GetSlice(obj.ImageSliceNumber, obj.AxialDimension);
-            globalMin = obj.Image.Limits(1);
-            globalMax = obj.Image.Limits(2);
-            if obj.ImageType == 2
-                value = uint8(value);
+classdef MimWSImageSlice < MimModel
+    methods (Access = protected)
+        function value = run(obj)
+            imageType = obj.Parameters.imageType;
+            imageVolume = obj.Callback.getModelValue(obj.Parameters.imageVolumeModelId);
+            slice = imageVolume.GetSlice(obj.Parameters.imageSliceNumber, obj.Parameters.axialDimension);
+            globalMin = imageVolume.Limits(1);
+            globalMax = imageVolume.Limits(2);
+            if imageType == 2
+                slice = uint8(slice);
             else
-                if isfloat(value)
+                if isfloat(slice)
                     % TODO: Rescale to max 254 to address client rendering issues
-                    value = uint16(254*(value - globalMin)/(globalMax - globalMin));
+                    slice = uint16(254*(slice - globalMin)/(globalMax - globalMin));
 %                     value = uint16(65535*(value - globalMin)/(globalMax - globalMin));
                 end
             end
-            hash = obj.Hash;
+            value = MimImageStorage(slice, imageType);
         end
     end
-    
-    methods (Static)
-        function key = getKeyFromParameters(parameters)
-            key = [parameters.parentView '-' num2str(parameters.imageSliceNumber)];
-        end
-    end    
 end

@@ -18,7 +18,7 @@ classdef PTKSoftwareInfo < handle
     properties (Constant)
         
         % Version numbers
-        Version = '0.7.5'
+        Version = '1.0.0'
         DicomVersion = '0.1'
         DiskCacheSchema = '0.1'
         PTKVersion = '2'
@@ -32,7 +32,6 @@ classdef PTKSoftwareInfo < handle
 
         % Appearance
         GraphFont = 'Helvetica'
-        GuiFont = 'Helvetica' 
 
         % Directories
         ScriptsDirectoryName = 'Scripts'

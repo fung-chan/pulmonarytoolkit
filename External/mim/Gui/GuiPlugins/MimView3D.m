@@ -18,8 +18,8 @@ classdef MimView3D < MimGuiPlugin
     %    
 
     properties
-        ButtonText = '3D View'
-        SelectedText = '3D View'        
+        ButtonText = '3D'
+        SelectedText = '3D'        
         ToolTip = 'Visualise the current overlay in 3D'
         Category = 'View'
         Visibility = 'Overlay'
@@ -48,13 +48,13 @@ classdef MimView3D < MimGuiPlugin
             new_label = ['MIM3D-' current_name];
             render_panel = gui_app.GetRenderPanel;
             current_label = render_panel.VisualisationLabel;
-            if ~strcmp(current_label, new_label)
+            if ~isempty(current_name) && ~strcmp(current_label, new_label)
                 render_panel.Clear;
 
                 switch current_name
                     case {'PTKAirways', 'PTKAirwaysLabelledByBronchus', 'PTKAirwaysLabelledByLobe', ...
                     'PTKAirwaysPrunedBySegment', 'PTKSegmentalBronchi', 'PTKVesselness', 'PTKPrunedAirways', ...
-                    'PTKPrunedAirwaysByLobe'}
+                    'PTKPrunedAirwaysByLobe', 'PTKAirwaysSimplePrunedImage'}
                         airways = true;
                     otherwise
                         airways = false;

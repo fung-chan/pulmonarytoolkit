@@ -115,6 +115,13 @@ classdef MimDataset < CoreBaseClass
             else
                 [result, ~] = obj.GetResultWithCacheInfo(plugin_name, varargin{:});
             end
+
+            % Simplify output; if only one context requested then only
+            % return that result
+            context_list = fieldnames(result);
+            if numel(context_list) == 1
+                result = result.(context_list{1});
+            end
         end
 
         function [result, cache_info, output_image] = GetResultWithCacheInfo(obj, plugin_name, context, varargin)
@@ -122,17 +129,27 @@ classdef MimDataset < CoreBaseClass
                 context = [];
             end
             
-            obj.PreCallTidy;
+            parameters = [];
+            if ~isempty(varargin)
+                if isa(varargin{end}, 'MimParameters')
+                    parameters = varargin{end};
+                    varargin = varargin(1:end-1);
+                end
+            end
+            
+            
+            obj.PreCallTidy();
             
             % Reset the dependency stack, since this could be left in a bad state if a previous plugin call caused an exception
             obj.DatasetStack.ClearStack;
             
             try
                 if nargout > 2
-                    [result, cache_info, output_image] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, obj.Reporting, varargin{2:end});
+                    [result, cache_info, output_image] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, parameters, obj.Reporting, varargin{2:end});
                 else
-                    [result, cache_info] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, obj.Reporting, varargin{2:end});
+                    [result, cache_info] = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetResult(plugin_name, obj.DatasetStack, context, parameters, obj.Reporting, varargin{2:end});
                 end
+                
             catch ex
                 
                 % Tidy up
@@ -344,9 +361,9 @@ classdef MimDataset < CoreBaseClass
         function is_gas_mri = IsGasMRI(obj, varargin)
             % Check if this is a hyperpolarised gas MRI image
             
-            obj.PreCallTidy;
+            obj.PreCallTidy();
             is_gas_mri = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).IsGasMRI(obj.DatasetStack, obj.Reporting);
-            obj.PostCallTidy;
+            obj.PostCallTidy();
         end
         
         function patient_name = GetPatientName(obj, varargin)
@@ -356,6 +373,18 @@ classdef MimDataset < CoreBaseClass
 
             patient_name = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetPatientName(obj.DatasetStack, obj.Reporting);
         end
+        
+        function primary_uid = GetPrimaryDatasetUid(obj)
+            primary_uid = obj.LinkedDatasetChooser.GetPrimaryDatasetUid();
+        end
+        
+        function SaveTableAsCSV(obj, plugin_name, subfolder_name, file_name, description, table, file_dim, row_dim, col_dim, filters, varargin)
+            obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).SaveTableAsCSV(plugin_name, subfolder_name, file_name, description, table, file_dim, row_dim, col_dim, filters, obj.DatasetStack, obj.Reporting);
+        end
+        
+        function contexts = GetAllContextsForManualSegmentations(obj, varargin)
+            contexts = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetAllContextsForManualSegmentations(obj.DatasetStack, obj.Reporting);
+        end        
     end
     
     methods (Access = private)
@@ -395,10 +424,6 @@ classdef MimDataset < CoreBaseClass
             % Fire an event indictaing the manual segmentation list has changed. This
             % will allow any listening gui to update if necessary
             obj.notify('ManualSegmentationsChanged', CoreEventData(event_data.Data));
-        end
-        
-        function contexts = GetAllContextsForManualSegmentations(obj, varargin)
-            contexts = obj.LinkedDatasetChooser.GetDataset(obj.Reporting, varargin{:}).GetAllContextsForManualSegmentations(obj.DatasetStack, obj.Reporting);
         end
     end
 end

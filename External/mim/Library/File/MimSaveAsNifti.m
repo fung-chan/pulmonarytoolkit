@@ -19,7 +19,11 @@ function MimSaveAsNifti(image_to_save, path, filename, reporting)
     %     Author: Tom Doel, Copyright Tom Doel 2014.  www.tomdoel.com
     %     Distributed under the MIT licence. Please see website for details.
     %        
-
+    
+    if nargin < 4
+        reporting = CoreReportingDefault();
+    end
+    
     if ~isa(image_to_save, 'PTKImage')
         reporting.Error('MimSaveAsNifti:InputMustBePTKImage', 'Requires a PTKImage as input');
     end
@@ -28,7 +32,7 @@ function MimSaveAsNifti(image_to_save, path, filename, reporting)
     
     full_filename = fullfile(path, filename);
 
-    resolution = image_to_save.VoxelSize([1, 2, 3]);
+    resolution = image_to_save.VoxelSize([2, 1, 3]);
     
     offset = [0 0 0];
     if isa(image_data, 'PTKDicomImage')

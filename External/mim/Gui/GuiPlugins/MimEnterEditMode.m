@@ -18,7 +18,7 @@ classdef MimEnterEditMode < MimGuiPlugin
         ButtonText = 'Correct'
         SelectedText = 'Correct'
         ToolTip = 'Enter correction mode where you can edit the segmented result'
-        Category = 'Correct'
+        Category = 'Correct and Export'
         Visibility = 'Dataset'
         Mode = 'Segment'
 
@@ -27,7 +27,7 @@ classdef MimEnterEditMode < MimGuiPlugin
         ButtonWidth = 6
         ButtonHeight = 1
         Icon = 'edit.png'
-        Location = 20
+        Location = 31
     end
     
     methods (Static)
@@ -37,7 +37,7 @@ classdef MimEnterEditMode < MimGuiPlugin
         
         function enabled = IsEnabled(gui_app)
             enabled = gui_app.IsDatasetLoaded && gui_app.ImagePanel.OverlayImage.ImageExists && ...
-                ~isequal(gui_app.GetCurrentModeName, MimModes.EditMode) && gui_app.IsTabEnabled('Edit');
+                gui_app.IsTabEnabled('Edit');
         end
         
         function is_selected = IsSelected(gui_app)

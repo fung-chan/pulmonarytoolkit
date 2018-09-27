@@ -65,7 +65,7 @@ function Compile(mex_files_to_compile, framework_cache, cached_mex_file_info, ou
         mex_file = mex_file_s{1};
         
         if (~mex_file.NeedsRecompile) && (~force_recompile)
-            reporting.Log([mex_file.Name ' is up to date']);
+            reporting.LogVerbose([mex_file.Name ' is up to date']);
             if ~strcmp(mex_file.StatusID, 'CoreCompileMexFiles:NoRecompileNeeded')
                 reporting.Error('CoreCompileMexFiles:WrongStatus', 'Program error: mex status should be OK if a recompile is not required');
             end
@@ -79,11 +79,11 @@ function Compile(mex_files_to_compile, framework_cache, cached_mex_file_info, ou
             elseif strcmp(mex_file.StatusID, 'CoreCompileMexFiles:FileAdded')
                 reporting.ShowMessage('CoreCompileMexFiles:FileAdded', ['A new mex file ' mex_file.Name ' has been found and requires compilation.']);
             elseif strcmp(mex_file.StatusID, 'CoreCompileMexFiles:NoCachedInfoForMex')
-                reporting.ShowMessage('CoreCompileMexFiles:NoCachedInfoForMex', [mex_file.Name ' requires compilation.']);
+                reporting.Log([mex_file.Name ' requires compilation.']);
             elseif strcmp(mex_file.StatusID, 'CoreCompileMexFiles:CacheFileDeleted')
                 reporting.ShowMessage('CoreCompileMexFiles:CacheFileDeleted', [mex_file.Name ' requires recompilation because it appears the cache file ' framework_cache.GetCacheFilename ' was deleted.']);
             elseif strcmp(mex_file.StatusID, 'CoreCompileMexFiles:CompiledFileNotFound')
-                reporting.ShowMessage('CoreCompileMexFiles:CompiledFileNotFound', [mex_file.Name ' requires compilation.']);
+                reporting.Log([mex_file.Name ' requires compilation.']);
 
 
             elseif strcmp(mex_file.StatusID, 'CoreCompileMexFiles:NoRecompileNeeded')
@@ -253,7 +253,7 @@ function CheckMexFiles(mex_files_to_compile, cached_mex_file_info, output_direct
     end
 end
 
-function name = GetNameOfCppCompiler
+function name = GetNameOfCppCompiler()
     cc = mex.getCompilerConfigurations('C++', 'Selected');
     if isempty(cc)
         name = [];
@@ -262,11 +262,10 @@ function name = GetNameOfCppCompiler
     end
 end
 
-function cuda_compiler = GetCudaCompiler
-    if ispc
-        [status, cuda_compiler] = system('where nvcc');
-
-        if status ~= 0
+function cuda_compiler = GetCudaCompiler()
+    cuda_compiler = CoreSystemUtilities.FindFirstExecutableOnPath('nvcc');
+    if isempty(cuda_compiler)
+        if ispc
             cuda_compiler = TryToFindCudaCompilerPc(fullfile(getenv('ProgramFiles'), 'NVIDIA GPU Computing Toolkit', 'CUDA'));
             if isempty(cuda_compiler)
                 cuda_compiler = TryToFindCudaCompilerPc(fullfile(getenv('ProgramW6432'), 'NVIDIA GPU Computing Toolkit', 'CUDA'));
@@ -274,12 +273,6 @@ function cuda_compiler = GetCudaCompiler
             if isempty(cuda_compiler)
                 cuda_compiler = TryToFindCudaCompilerPc(fullfile(getenv('ProgramFiles(x86)'), 'NVIDIA GPU Computing Toolkit', 'CUDA'));
             end
-        end
-    else
-        [status, cuda_compiler] = system('which nvcc');
-
-        if status == 0
-            cuda_compiler = CoreTextUtilities.RemoveNonprintableCharactersAndStrip(cuda_compiler);
         else
             if 2 == exist('/usr/local/cuda/bin/nvcc', 'file')
                 cuda_compiler = '/usr/local/cuda/bin/nvcc';
@@ -297,7 +290,7 @@ function compiler = TryToFindCudaCompilerPc(base_dir)
     for dir_name = directories
         bin_dir = fullfile(base_dir, dir_name{1}, 'bin');
         if isdir(bin_dir)
-            compiler = bin_dir;
+            compiler = fullfile(bin_dir, 'NVCC.EXE');
             return;
         end
     end

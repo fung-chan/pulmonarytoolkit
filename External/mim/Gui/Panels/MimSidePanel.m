@@ -53,9 +53,11 @@ classdef MimSidePanel < GemPanel
             
             obj.LinkedSeriesSidePanel = MimLinkedSeriesSidePanel(obj, patient_database, linked_recorder, group_patients_with_same_name, controller);
             obj.AddChild(obj.LinkedSeriesSidePanel);
+            obj.LinkedSeriesSidePanel.TopBorder = true;
             
             obj.SeriesSidePanel = MimSeriesSidePanel(obj, patient_database, group_patients_with_same_name, controller);
             obj.AddChild(obj.SeriesSidePanel);
+            obj.SeriesSidePanel.TopBorder = true;
             
             obj.Repopulate;
 
@@ -149,6 +151,9 @@ classdef MimSidePanel < GemPanel
                 obj.SeriesSidePanel.SelectNextSeries;
                 input_has_been_processed = true;
             elseif strcmpi(key, 'delete')
+                obj.SeriesSidePanel.DeleteSelectedSeries;
+                input_has_been_processed = true;
+            elseif strcmpi(key, 'backspace')
                 obj.SeriesSidePanel.DeleteSelectedSeries;
                 input_has_been_processed = true;
             elseif strcmpi(key, 'insert')

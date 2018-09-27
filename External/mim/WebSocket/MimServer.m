@@ -3,8 +3,7 @@ classdef MimServer < handle
     properties (Access = private)
         WebSocketServer
         Mim
-        ModelCache
-        ModelList
+        ModelController
         Reporting
     end
     
@@ -45,9 +44,8 @@ classdef MimServer < handle
             framework_def = PTKFrameworkAppDef;
             obj.Reporting = MimReporting([], [], 'mimserver.log');
             obj.Mim = MimMain(framework_def, obj.Reporting);
-            obj.ModelCache = MimModelCache();
-            obj.ModelList = MimModelList(obj.Mim);
-            obj.WebSocketServer = MimWebSocketServer(30000, obj.ModelList);
+            obj.ModelController = MimModelController(obj.Mim);
+            obj.WebSocketServer = MimWebSocketServer(30000, obj.ModelController);
         end
         
         function startServer(obj)
@@ -61,8 +59,7 @@ classdef MimServer < handle
         end
 
         function clearModels(obj)
-            obj.ModelList.clear();
-            obj.ModelCache.clear();
+            obj.ModelController.clear();
             obj.WebSocketServer.clearModels();
         end
         
@@ -71,7 +68,7 @@ classdef MimServer < handle
         end
         
         function triggerUpdateLocalModelValue(obj, modelName)
-            [value, hash] = obj.ModelList.getValue(modelName);
+            [value, hash] = obj.ModelController.getValue(modelName);
             obj.WebSocketServer.updateLocalModelValue(modelName, hash, value);
         end
         

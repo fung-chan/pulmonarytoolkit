@@ -37,8 +37,8 @@ classdef MimToolList < handle
             obj.ViewerPanel = viewer_panel;
             
             obj.CineTool = MimCineTool(image_parameters, tool_callback);
-            obj.WindowLevelTool = MimWindowLevelTool(image_display_parameters, tool_callback);
-            obj.ZoomTool = MimZoomTool(tool_callback);
+            obj.WindowLevelTool = MimWindowLevelTool(image_display_parameters, tool_callback, viewer_panel);
+            obj.ZoomTool = MimZoomTool(image_parameters, tool_callback);
             obj.PanTool = MimPanTool(tool_callback);
             obj.PanMatlabTool = MimPanMatlabTool(tool_callback);
             obj.Rotate3dMatlabTool = MimRotate3dMatlabTool(tool_callback);
@@ -94,9 +94,12 @@ classdef MimToolList < handle
             % Enable tools
             for tool_set = tool_list
                 tool = tool_set{1};
-                if strcmp(obj.ViewerPanel.SelectedControl, tool.Tag);
+                if strcmp(obj.ViewerPanel.SelectedControl, tool.Tag)
                     tool.Enable(true);
-                    obj.ToolCallback.GetAxes.SetContextMenu(tool.GetContextMenu);
+                    % Set the context menu on the images. Note it would be hidden by
+                    % the images if it were set on the axes
+                    obj.ViewerPanel.BackgroundLayer.SetContextMenu(tool.GetContextMenu);
+                    obj.ViewerPanel.SegmentationLayer.SetContextMenu(tool.GetContextMenu);
                 end
             end
         end
