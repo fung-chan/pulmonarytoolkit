@@ -1,0 +1,4 @@
+LeftObliqueSearchingRegion 20
+RightObliqueSearchingRegion 20
+RightHorizontalSearchingRegion 15
+ConnectedComponentNumber 300
