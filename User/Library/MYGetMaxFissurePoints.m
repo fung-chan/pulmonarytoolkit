@@ -1,0 +1,404 @@
+function [high_fissure_indices, ref_image] = MYGetMaxFissurePoints(Vx,Vy,Vz,fissure_approximation, lung_mask, PTKfissureness, MYfissureness, image_roi, image_size, Eig_min_connected_size)
+    % PTKGetMaxFissurePoints. function for finding candidate points of high
+    %     fissureness given an initial fissure approximation.
+    %
+    %     PTKGetMaxFissurePoints is an intermediate stage in segmenting the
+    %     lobes. It is not intended to be a general-purpose algorithm.    
+    %
+    %     For more information, see 
+    %     [Doel et al., Pulmonary lobe segmentation from CT images using
+    %     fissureness, airways, vessels and multilevel B-splines, 2012]
+    %
+    %     Licence
+    %     -------
+    %     Part of the TD Pulmonary Toolkit. https://github.com/tomdoel/pulmonarytoolkit
+    %     Author: Tom Doel, 2012.  www.tomdoel.com
+    %     Distributed under the GNU GPL v3 licence. Please see website for details.
+    %
+
+    data_points_indices = find(fissure_approximation);
+    
+    bin_size = 2;
+
+    [high_fissure_indices, ref_image] = GetFissurePoints(Vx,Vy,Vz,data_points_indices, image_size, lung_mask, PTKfissureness, MYfissureness, image_roi, bin_size, Eig_min_connected_size);
+end
+
+
+function [maximum_fissureness_indices, ref_image] = GetFissurePoints(Vx,Vy,Vz,indices_for_model, image_size, lung_segmentation, PTKfissureness, MYfissureness, image_roi, bin_size, Eig_min_connected_size)
+
+    % Get the coordinates of every voxel in the lung segmentation
+%     candidate_indices = find(lung_segmentation.RawImage);
+    candidate_indices = find(MYfissureness.RawImage);
+    
+    % An image for debugging
+    ref_image = zeros(image_size, 'uint8');
+%     ref_image(candidate_indices) = 2;
+
+    % Remove points with low fissureness
+    max_fissureness = max(MYfissureness.RawImage(candidate_indices));
+    fissureness_threshold = max_fissureness/3;
+    intensity_threshold_hu = -900;
+    intensity_threshold = image_roi.HounsfieldToGreyscale(intensity_threshold_hu);
+    candidate_indices = candidate_indices((MYfissureness.RawImage(candidate_indices) > fissureness_threshold) & (image_roi.RawImage(candidate_indices) > intensity_threshold));
+    [x_all, y_all, z_all] = PTKImageCoordinateUtilities.FastInd2sub(image_size, candidate_indices);
+    points_coords = ArraysToPoints(x_all(:), y_all(:), z_all(:));
+%     ref_image(candidate_indices) = 4;
+    
+%     points_coords = candidate_indices;
+    candidate_indices = RemoveSmallConnectedStructure(Vx,Vy,Vz,points_coords, lung_segmentation, image_size, Eig_min_connected_size);
+
+    if isempty(candidate_indices)
+        maximum_fissureness_indices = [];
+        return;
+    end
+    
+    % Find a rotation matrix
+    [eigv, m] = GetRotationMatrix(indices_for_model, image_size);
+    
+    [x_all, y_all, z_all] = PTKImageCoordinateUtilities.FastInd2sub(image_size, candidate_indices);
+    X_all = [x_all(:), y_all(:), z_all(:)]';
+    
+    % Transform to new basis
+    em_all = X_all - m(:, ones(1, size(X_all, 2)));
+    em_all = eigv*em_all;
+        
+    % We allocate each point to a bin according to the x-y coordinates in the
+    % transformed domain
+    x1_all = em_all(1, :);
+    y1_all = em_all(2, :);
+
+    % Get the coordinates of each of the model points
+    [x_model, y_model, z_model] = PTKImageCoordinateUtilities.FastInd2sub(image_size, indices_for_model);    
+    X_model = [x_model(:), y_model(:), z_model(:)]';
+    
+    % Transform to new basis
+    em_model = X_model - m(:, ones(1, size(X_model, 2)));
+    em_model = eigv*em_model;
+    
+    % We allocate each point to a bin according to the x-y coordinates in the
+    % transformed domain
+    x1_model = em_model(1, :);
+    y1_model = em_model(2, :);
+    
+    % Project the candidate points onto the fissure plane, and remove those that
+    % are not within the convex hull formed by the model points on the plane. In
+    % effect, we are using the model coordinates (the initial guess) as a bound
+    % for the x-y coordinates used to construct the fissure surface.
+    xy_coords_model = [x1_model', y1_model'];
+    dt = DelaunayTri(xy_coords_model);
+    simplex_index = pointLocation(dt, x1_all', y1_all');
+    is_valid = ~isnan(simplex_index);
+    candidate_indices_ok = candidate_indices(is_valid);
+    
+    if isempty(candidate_indices_ok)
+        maximum_fissureness_indices = [];
+        return;
+    end
+    
+    % Turn into x,y,z vectors
+    [x_all, y_all, z_all] = PTKImageCoordinateUtilities.FastInd2sub(image_size, candidate_indices_ok);
+    X_all = [x_all(:), y_all(:), z_all(:)]';    
+
+    % Transform to new basis
+    em_all = X_all - m(:, ones(1, size(X_all, 2)));
+    em_all = eigv*em_all;
+    
+    % We allocate each point to a bin according to the x-y coordinates in the
+    % transformed domain
+    x1_all = em_all(1, :);
+    y1_all = em_all(2, :);    
+    
+    [maximum_fissureness_indices, all_maxima] = SortIntoBins(x1_all, y1_all, candidate_indices_ok,PTKfissureness, bin_size, image_size);
+    
+%     ref_image(all_maxima) = 6;
+%     ref_image(maximum_fissureness_indices) = 3;
+
+    % Remove non-connected points (outliers)
+    [x_all, y_all, z_all] = PTKImageCoordinateUtilities.FastInd2sub(image_size, maximum_fissureness_indices);
+    points_coords = ArraysToPoints(x_all(:), y_all(:), z_all(:));
+        
+    min_dilate_size_mm = 2.5;
+    max_dilate_size_mm = 2.5;
+    
+    dilate_size_mm = min_dilate_size_mm;
+    
+    calculate_again = true;
+    target_number_of_points = round(numel(x_all)/2);
+    
+    % Perform the removal of connected points with a variable dilation size
+    while calculate_again
+        points_coords_new = RemoveNonConnectedPoints(points_coords, lung_segmentation, image_size, dilate_size_mm);
+        number_of_found_points = numel(points_coords_new);
+        if (number_of_found_points >= target_number_of_points) || (dilate_size_mm > max_dilate_size_mm)
+            calculate_again = false;
+        else
+            dilate_size_mm = dilate_size_mm + 0.5;
+        end
+        
+    end
+%     
+%     [x_all, y_all, z_all] = PointsToArrays(points_coords_new);
+% [i2_coords, j2_coords, k2_coords] = ind2sub(image_size, candidate_indices);
+%     points_coords = ArraysToPoints(i2_coords, j2_coords, k2_coords);
+    [x_all, y_all, z_all] = PointsToArrays(points_coords_new);
+    maximum_fissureness_indices = PTKImageCoordinateUtilities.FastSub2ind(image_size, x_all(:), y_all(:), z_all(:));
+% maximum_fissureness_indices = candidate_indices;    
+ref_image(maximum_fissureness_indices) = 1;
+    
+end
+
+
+function [rot_matrix, m] = GetRotationMatrix(indices, image_size)
+    [x, y, z] = ind2sub(image_size, indices);
+    X = [x, y, z]';
+
+    % Find a suitable basis for these points using PCA
+    m = mean(X, 2);
+    em = X - m(:, ones(1, size(X, 2)));
+    eigv = pts_pca(em);
+    
+    rot_matrix = eigv';
+end
+
+
+function [maximum_fissureness_indices, all_maxima] = SortIntoBins(x1, y1, candidate_indices, fissureness, bin_size, image_size)
+    binx = floor(x1/bin_size);
+    binx = binx - min(binx);
+    biny = floor(y1/bin_size);
+    biny = biny - min(biny);
+    
+    % bin is an array containing the bin to which each element of indices has been allocated
+    bin = binx + (max(binx)+1)*biny;
+    
+    % Now sort the indices and bins by fissureness
+    fissureness_at_indices = fissureness.RawImage(candidate_indices);
+    
+    is_maxima = GetMaxima(candidate_indices, bin, fissureness_at_indices, fissureness, image_size);
+    all_maxima = candidate_indices(is_maxima);
+    bin = bin(is_maxima);
+    candidate_indices = candidate_indices(is_maxima);
+
+    fissureness_at_indices = fissureness.RawImage(candidate_indices);
+    
+    [~, sorted_indices] = sort(fissureness_at_indices, 'descend');
+    indices_sorted_by_fissureness = candidate_indices(sorted_indices);
+    bins_sorted_by_fissureness = bin(sorted_indices);
+
+    % Use unique to obtain the first indices corresponding to each bin - this
+    % will be the point with the largest fissureness
+    maximum_fissureness_indices = [];
+    for selection_index = 1 : 1
+        [~, bin_indices, ~] = unique(bins_sorted_by_fissureness, 'first');
+        maximum_fissureness_indices = [maximum_fissureness_indices; indices_sorted_by_fissureness(bin_indices)];
+        
+        bins_sorted_by_fissureness(bin_indices) = [];
+        indices_sorted_by_fissureness(bin_indices) = [];
+    end
+    
+    maximum_fissureness_indices = maximum_fissureness_indices(fissureness.RawImage(maximum_fissureness_indices) > 0);
+
+end
+
+function is_maxima = GetMaxima(candidate_indices, bin, fissureness_at_indices, fissureness, image_size)
+    bin_allocation = zeros(image_size, 'int32');
+    bin_allocation(candidate_indices) = bin;
+    
+    [linear_offsets, ~] = PTKImageCoordinateUtilities.GetLinearOffsets(image_size);
+    neighbours = repmat(int32(candidate_indices), 1, 6) + repmat(int32(linear_offsets), length(candidate_indices), 1);
+    fissureness_neighbours = fissureness.RawImage(neighbours);
+    bins_neighbours = bin_allocation(neighbours);
+    bins_match = bins_neighbours == repmat(bin', 1, 6);
+    fissureness_centre = repmat(fissureness_at_indices, 1, 6);
+    
+    % Force neighbouring points in different bins to have a lower fissureness
+    fissureness_neighbours(~bins_match) = fissureness_centre(~bins_match) - 1;
+    fissureness_less = fissureness_neighbours < fissureness_centre;
+    sums = sum(fissureness_less, 2);
+    is_maxima = sums == 6;
+end
+
+
+function points_coords = RemoveNonConnectedPoints(points_coords, template_image, image_size, dilate_size_mm)
+    voxel_volume = prod(template_image.VoxelSize);
+    %% Get the minimum connected component size
+    current_path = mfilename('fullpath');
+    [path_root, ~, ~] = fileparts(current_path);
+    full_filename = fullfile(path_root,'..','..','User', 'Library', 'PTKSearchingRegionThreshold.txt');
+    FidOpen = fopen(full_filename,'r');
+    tline1 = fgetl(FidOpen);
+    tline2 = fgetl(FidOpen);
+    tline3 = fgetl(FidOpen);
+    tline4 = fgetl(FidOpen);
+    fclose(FidOpen);
+    min_component_size_mm3 = str2num(tline4(26:end));
+    %     min_component_size_mm3 = 300;
+    min_component_size_voxels = round(min_component_size_mm3/voxel_volume);
+
+    
+    image_mask = false(image_size);
+    indices = sub2ind(image_size, points_coords(:,1), points_coords(:,2), points_coords(:,3));
+    image_mask(indices) = true;
+    
+    tci = template_image.BlankCopy;
+    tci.ChangeRawImage(image_mask);
+    tci.BinaryMorph(@imdilate, dilate_size_mm);
+    connected_image = tci.RawImage;
+    
+    connected_components = bwconncomp(connected_image, 26);
+    num_components = connected_components.NumObjects;
+    for component = 1 : num_components
+        pixels = connected_components.PixelIdxList{component};
+        if length(pixels) < min_component_size_voxels
+            connected_image(pixels) = false;
+        end
+    end
+    image_mask = image_mask & connected_image;
+    indices = find(image_mask(:));
+    [i2_coords, j2_coords, k2_coords] = ind2sub(image_size, indices);
+    points_coords = ArraysToPoints(i2_coords, j2_coords, k2_coords);
+end
+
+function reduced_indices = RemoveSmallConnectedStructure(Vx,Vy,Vz,points_coords, template_image, image_size, Eig_min_connected_size)
+    voxel_volume = prod(template_image.VoxelSize);
+
+    min_component_size_mm3 = 3;
+    min_component_size_voxels = round(min_component_size_mm3/voxel_volume);
+
+    
+    image_mask = false(image_size);
+    indices = sub2ind(image_size, points_coords(:,1), points_coords(:,2), points_coords(:,3));
+    image_mask(indices) = true;
+    
+%     
+%     connected_components = bwconncomp(image_mask, 8);
+%     num_components = connected_components.NumObjects;
+%     for component = 1 : num_components
+%         pixels = connected_components.PixelIdxList{component};
+%         if length(pixels) < min_component_size_voxels
+%             image_mask(pixels) = false;
+%         end
+%     end
+        
+    % Eigenvector-based connected component analysis
+    indices = find(image_mask(:));
+    [linear_offsets, ~] = PTKImageCoordinateUtilities.GetLinearOffsets(image_size);
+    neighbours = repmat(int32(indices), 1, 6) + repmat(int32(linear_offsets), length(indices), 1);
+%     load('Vx_slow.mat');
+%     load('Vy_slow.mat');
+%     load('Vz_slow.mat');
+    Vx_neighbours = Vx(neighbours);
+    Vy_neighbours = Vy(neighbours);
+    Vz_neighbours = Vz(neighbours);
+    Vx_at_indices = Vx(indices);
+    Vy_at_indices = Vy(indices);
+    Vz_at_indices = Vz(indices);
+%     Vx_neighbours = Vx_slow(neighbours);
+%     Vy_neighbours = Vy_slow(neighbours);
+%     Vz_neighbours = Vz_slow(neighbours);
+%     Vx_at_indices = Vx_slow(indices);
+%     Vy_at_indices = Vy_slow(indices);
+%     Vz_at_indices = Vz_slow(indices);
+    Vx_centre = repmat(Vx_at_indices, 1, 6);
+    Vy_centre = repmat(Vy_at_indices, 1, 6);
+    Vz_centre = repmat(Vz_at_indices, 1, 6);
+    Inner_product = Vx_centre.*Vx_neighbours+ Vy_centre.*Vy_neighbours+ Vz_centre.*Vz_neighbours;
+    Is_connect = sum((Inner_product>0.7),2);
+    Is_connect = (Is_connect>0);
+    connected_indices = indices(Is_connect);
+    
+    
+%     image_mask1 = false(image_size);
+% %     indices = sub2ind(image_size, points_coords(:,1), points_coords(:,2), points_coords(:,3));
+%     image_mask1(connected_indices) = true;
+    
+    image_mask = false(image_size);
+    image_mask(connected_indices) = true;
+    
+    min_component_size_mm31 = Eig_min_connected_size;
+    %     min_component_size_mm3 = 300;
+    min_component_size_voxels1 = round(min_component_size_mm31/voxel_volume);
+%     tci = template_image.BlankCopy;
+%     tci.ChangeRawImage(image_mask);
+%     tci.BinaryMorph(@imdilate, dilate_size_mm);
+%     connected_image = tci.RawImage;
+    
+    connected_components = bwconncomp(image_mask, 6);
+    
+    num_components = connected_components.NumObjects;
+    connected_number = zeros(1,num_components);
+    for component = 1 : num_components
+        connected_number(component) = length(connected_components.PixelIdxList{component});
+    end
+    maximum_number = max(connected_number);
+    maximum_indice = find(connected_number==maximum_number);
+    pixels = connected_components.PixelIdxList{maximum_indice(1)};
+    image_mask = false(image_size);
+    image_mask(pixels) = true;
+    
+    indices = find(image_mask(:));
+    reduced_indices = EigenvectorConnectedComponentAnalysis(Vx,Vy,Vz,indices,image_size,voxel_volume, Eig_min_connected_size);
+%     image_mask = false(image_size);
+%     image_mask(reduced_indices) = true;
+%     [i2_coords, j2_coords, k2_coords] = ind2sub(image_size, indices);
+%     points_coords = ArraysToPoints(i2_coords, j2_coords, k2_coords);
+end
+
+function indices_out = EigenvectorConnectedComponentAnalysis(Vx,Vy,Vz,indices, image_size,voxel_volume, Eig_min_connected_size)
+
+    min_component_size_mm31 = Eig_min_connected_size;
+    min_component_size_voxels1 = round(min_component_size_mm31/voxel_volume);
+    
+    % Eigenvector based connected component analysis
+    indices_out = indices;
+    lung_mask = false(image_size);
+    lung_mask(indices) = true;
+    [linear_offsets, ~] = PTKImageCoordinateUtilities.GetLinearOffsets(image_size);
+    while indices
+        quene = indices(1);
+        connected_component = quene;
+        while quene
+            current_indice = quene(1);
+            lung_mask(current_indice) = false;
+            quene(1) = [];
+            indices(indices == current_indice) = [];
+            neighbour_indices = repmat(int32(current_indice), 1, 6) + repmat(int32(linear_offsets), length(current_indice), 1);
+            for m = 1:length(neighbour_indices)
+                if lung_mask(neighbour_indices(m)) == true
+                    Vx_centre = Vx(current_indice);
+                    Vy_centre = Vy(current_indice);
+                    Vz_centre = Vz(current_indice);
+                    Vx_neighbours = Vx(neighbour_indices(m));
+                    Vy_neighbours = Vy(neighbour_indices(m));
+                    Vz_neighbours = Vz(neighbour_indices(m));
+                    Inner_product = Vx_centre.*Vx_neighbours+ Vy_centre.*Vy_neighbours+ Vz_centre.*Vz_neighbours;
+                    if Inner_product > 0.7
+                        connected_component(end+1) = neighbour_indices(m);
+                        quene(end+1) = neighbour_indices(m);
+                        lung_mask(neighbour_indices(m)) = false;
+                        indices(indices == neighbour_indices(m)) = [];
+                    end
+                end
+            end
+            
+            if length(connected_component)>min_component_size_voxels1
+                break
+            end
+        end
+        if length(connected_component)<min_component_size_voxels1
+            for connected = 1:length(connected_component)
+                 indices_out(indices_out == connected_component(connected)) = [];
+            end
+        end
+    end
+end
+
+function points = ArraysToPoints(i, j, k)
+    points = [i(:), j(:), k(:), ones(size(i(:)))];
+end
+
+
+function [is, js, ks] = PointsToArrays(points)
+    is = points(:, 1);
+    js = points(:, 2);
+    ks = points(:, 3);
+end

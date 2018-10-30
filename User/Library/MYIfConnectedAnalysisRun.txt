@@ -1,0 +1,3 @@
+IsRunConnectedAnalysisForLOfissure 0
+IsRunConnectedAnalysisForROfissure 0
+IsRunConnectedAnalysisForRHfissure 0

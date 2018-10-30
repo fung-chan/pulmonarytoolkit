@@ -1,0 +1,3 @@
+MinimumEigenvectorConnectedSizeForLOfissure 30
+MinimumEigenvectorConnectedSizeForROfissure 30
+MinimumEigenvectorConnectedSizeForRHfissure 30

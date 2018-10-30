@@ -1,0 +1,1 @@
+IsRunManualLungSegmentation 0
