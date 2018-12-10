@@ -68,7 +68,7 @@ classdef MYSaveLungMask < PTKPlugin
                     save_image_name = strcat(save_mask_path,'0',num2str(i-1),'.jpg');
                 end
                 current_image1 = uint8(current_image1);
-                imwrite(current_image1,save_image_name, 'Mode', 'lossless');
+                imwrite(current_image1,save_image_name);%, 'Mode', 'lossless');
             end
             results = lung_results.Copy;
         end
