@@ -21,7 +21,7 @@ classdef MYOutputLungDensityAverage5x5x5 < PTKPlugin
     %
     
     properties
-        ButtonText = 'Output Lung Density Average (5x5x5)'
+        ButtonText = 'Output Lung Density (5x5)'
         ToolTip = 'Output Lung segmentation data cloud with density information averaged over a 5x5x5 neighborhood and convert it into exdata and ipdata'
         Category = 'Export'
         
