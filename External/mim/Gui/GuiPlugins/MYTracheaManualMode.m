@@ -1,5 +1,6 @@
 classdef MYTracheaManualMode < MimGuiPlugin
-    % MYTracheaManualMode. Gui Plugin for enabling or disabling trachea manual location mode
+    % MYTracheaManualMode. Gui Plugin for enabling or disabling mode to
+    % manually find the trachea location
     %
     %     You should not use this class within your own code. It is intended to
     %     be used by the gui of the Pulmonary Toolkit.
@@ -15,7 +16,7 @@ classdef MYTracheaManualMode < MimGuiPlugin
     properties
         ButtonText = 'Auto Trachea'
         SelectedText = 'Manual Trachea'
-        ToolTip = 'Enables or disabled manual control of trachea location mode'
+        ToolTip = 'Enables or disables mode to manually find the trachea location'
         Category = 'Trachea location manual control tools'
         Visibility = 'Always'
 %         Mode = 'View'

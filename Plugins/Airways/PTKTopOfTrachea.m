@@ -55,8 +55,22 @@ classdef PTKTopOfTrachea < PTKPlugin
                 threshold_image = lung_threshold.LungMask;
             else
                 threshold_image = dataset.GetResult('PTKThresholdLung');
-            end            
-            [top_of_trachea, trachea_voxels] = PTKFindTopOfTrachea(threshold_image, reporting, PTKSoftwareInfo.GraphicalDebugMode);
+            end   
+            
+            % check if manual trachea location is on
+            path_root = pwd;
+            full_filename = fullfile(path_root,'User', 'Library', 'MYIfManualTracheaLocation.txt');
+            FidOpen = fopen(full_filename,'r');
+            tline1 = fgetl(FidOpen);
+            fclose(FidOpen);
+            trachea_control_value = str2double(tline1(29));
+            
+            if trachea_control_value == 1
+                [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(threshold_image, reporting, PTKSoftwareInfo.GraphicalDebugMode);
+            else
+                [top_of_trachea, trachea_voxels] = PTKFindTopOfTrachea(threshold_image, reporting, PTKSoftwareInfo.GraphicalDebugMode);
+            end
+            
             results = [];
             results.top_of_trachea = top_of_trachea;
             results.trachea_voxels = trachea_voxels;

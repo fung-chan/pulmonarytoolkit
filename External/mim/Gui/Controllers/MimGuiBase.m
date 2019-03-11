@@ -20,6 +20,7 @@ classdef MimGuiBase < GemFigure
     
     properties (SetObservable)
         DeveloperMode = false
+        TracheaManualMode = false
     end
     
     properties (Access = private)
@@ -186,7 +187,8 @@ classdef MimGuiBase < GemFigure
             obj.ReorderPanels;
 
             obj.AddPostSetListener(obj, 'DeveloperMode', @obj.DeveloperModeChangedCallback);
-            
+            obj.AddPostSetListener(obj, 'TracheaManualMode', @obj.TracheaManualModeChangedCallback);
+
             % Listen for changes in the viewer panel controls
             obj.AddPostSetListener(obj.ImagePanel, 'SelectedControl', @obj.ViewerPanelControlsChangedCallback);
             obj.AddPostSetListener(obj.ImagePanel, 'Mode', @obj.ViewerPanelModeChangedCallback);
@@ -802,6 +804,23 @@ classdef MimGuiBase < GemFigure
             
             obj.GuiDataset.UpdateModeTabControl();
             obj.RefreshPlugins();
+        end
+        
+        function TracheaManualModeChangedCallback(obj, ~, ~, ~)
+            % This methods is called when the TracheaManualMode property is changed
+            
+            obj.GuiDataset.UpdateModeTabControl();
+            obj.RefreshPlugins();
+            
+            % Change the on-off value for this mode in the txt file
+            path_root = pwd;
+            full_filename = fullfile(path_root,'User/Library/MYIfManualTracheaLocation.txt');
+            FidOpen = fopen(full_filename,'r'); % Read in the current value
+            tline1 = fgetl(FidOpen);
+            fclose(FidOpen);
+            FidOut = fopen(full_filename,'wt');
+            fprintf(FidOut,[tline1(1:27) ' ' num2str(obj.TracheaManualMode) '\n']);
+            fclose(FidOut);
         end
 
         function ShowMarkersChanged(obj, ~, ~)

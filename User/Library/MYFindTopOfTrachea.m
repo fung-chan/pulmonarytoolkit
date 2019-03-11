@@ -1,12 +1,13 @@
 function [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(lung_image, reporting, debug_mode)
-    % PTKFindTopOfTrachea. Finds the trachea from a thresholded lung CT image.
-    %
+    % MYFindTopOfTrachea. Allows you to manually find the trachea from a
+    % thresholded lung CT image; alternative to PTKFindTopOfTrachea 
+    %     
     % Given a binary image which representes an airway threshold applied to a
     % lung CT image, PTKFindTopOfTrachea finds the coordinate of a point
     % within and near the top of the trachea
     %
     % Syntax:
-    %     top_of_trachea = PTKFindTopOfTrachea(lung_image, reporting)
+    %     top_of_trachea = MYFindTopOfTrachea(lung_image, reporting)
     %     [top_of_trachea, trachea_voxels] = PTKFindTopOfTrachea(lung_image, reporting)
     %
     % Inputs:
@@ -19,8 +20,8 @@ function [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(lung_image, repor
     %         crop the image, so that the correct VoxelSize,
     %         OriginalImageSize and Origin parameters are set.
     %
-    %     reporting (optional) - an object implementing the PTKReporting
-    %         interface for reporting progress and warnings
+    %     reporting (optional) - an object implementing CoreReportingInterface
+    %         for reporting progress and warnings
     %
     % Outputs:
     %     top_of_trachea - coordinate (i,j,k) of a point inside and near the top
@@ -42,7 +43,11 @@ function [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(lung_image, repor
     end
     
     if nargin < 2
-        reporting = PTKReportingDefault;
+        reporting = CoreReportingDefault;
+    end
+    
+    if nargin < 3
+        debug_mode = false;
     end
     
     reporting.UpdateProgressMessage('Finding top of trachea');
@@ -93,7 +98,7 @@ function [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(lung_image, repor
     if debug_mode
         debug_image.ChangeRawImage(partial_image.RawImage);
         reporting.UpdateOverlaySubImage(debug_image);
-        PTKVisualiseIn3D([], debug_image, [], true, true, 0, reporting);
+        MimVisualiseIn3D([], debug_image, [], true, true, 0, CoreSystemUtilities.BackwardsCompatibilityColormap, reporting);
         pause;
     end
     
@@ -101,35 +106,35 @@ function [top_of_trachea, trachea_voxels] = MYFindTopOfTrachea(lung_image, repor
     % that are too wide or which touch the edges. The first pass helps to
     % disconnect the trachea from the rest of the lung, so that less of the
     % trachea is removed in the second pass.
-    partial_image2 = ReduceImageToCentralComponents(partial_image.RawImage, ceil(1.3/lung_image.VoxelSize(3)), lung_image.VoxelSize, 1, reporting);
+    partial_image2 = ReduceImageToCentralComponents(partial_image.RawImage, ceil(5/lung_image.VoxelSize(3)), lung_image.VoxelSize, 1, reporting);
+    partial_image2 = ReduceImageToCentralComponents(partial_image2, ceil(1.3/lung_image.VoxelSize(3)), lung_image.VoxelSize, 1, reporting);
 
     if debug_mode
         debug_image.ChangeRawImage(partial_image2);
         reporting.UpdateOverlayImage(debug_image);
-        PTKVisualiseIn3D([], debug_image, [], true, true, 0, reporting);
+        MimVisualiseIn3D([], debug_image, [], true, true, 0, CoreSystemUtilities.BackwardsCompatibilityColormap, reporting);
         pause;
     end
     
-    % Reduce the image to the main component
-    processed_image2 = DeleteSmallComponent(partial_image2);
+    % Manually choose trachea location from image
     i = 1;
     x_coord = [];
     figure();
     while isempty(x_coord)
-    imshow(processed_image2(:,:,i))
+    imshow(partial_image2(:,:,i))
     [x_coord,y_coord] = ginput();
     i = i+1;
     end
     close(gcf);
-    original_top_of_trachea = [y_coord,x_coord,i-1];
-%     original_top_of_trachea = FindHighestPoint(processed_image2, lung_image.VoxelSize);
-%     original_top_of_trachea = [133, 189 ,1];
-    result = FindLargestComponent(partial_image2 , original_top_of_trachea);
+    manual_top_of_trachea = [y_coord,x_coord,i-1];
+    
+    % Reduce the image to the main component
+    result = FindLargestComponent(partial_image2, manual_top_of_trachea);
     
     if debug_mode
         debug_image.ChangeRawImage(result);
         reporting.UpdateOverlayImage(debug_image);
-        PTKVisualiseIn3D([], debug_image, [], true, true, 0, reporting);
+        MimVisualiseIn3D([], debug_image, [], true, true, 0, CoreSystemUtilities.BackwardsCompatibilityColormap, reporting);
         pause;
     end
     
@@ -157,7 +162,7 @@ end
 
 function relative_top_of_trachea = FindHighestPoint(component, voxel_size)
     
-%     Find k-coordinate of highest point in the image component
+    % Find k-coordinate of highest point in the image component
     k_highest = find(any(any(component, 1), 2), 1, 'first');
     
     % Get a thick slice starting from this coordinate
@@ -183,34 +188,6 @@ function relative_top_of_trachea = FindHighestPoint(component, voxel_size)
     % Return point in [i,j,k] notation
     [i, j, k] = ind2sub(size(thick_slice), all_points(nearest_point_index_index));
     relative_top_of_trachea = [i, j, k + k_highest - 1];
-    
-%     %% New
-%      % Find k-coordinate of highest point in the image component
-%     i_min = find(any(any(component, 2), 3), 1, 'first');
-%     
-%     % Get a thick slice starting from this coordinate
-%     slice_thickness_mm = 3;
-%     voxel_thickness = ceil(slice_thickness_mm/voxel_size(3));
-%     thick_slice = component(i_min : i_min+voxel_thickness-1, :, :);
-%     voxel_indices = find(thick_slice(:));
-%     
-%     % Find the centrepoint
-%     centroid = GetCentroid(voxel_indices, size(thick_slice));
-%     
-%     % Look for a central point at the top
-%     centrepoint = [1 , centroid(2), centroid(3)];
-%     
-%     % Get coordinates of all the points
-%     all_points = find(thick_slice(:));
-%     [p_x, p_y, p_z] = ind2sub(size(thick_slice), all_points);
-%     
-%     % Find closest point in the component to this point
-%     X = double([p_x, p_y, p_z]);
-%     nearest_point_index_index = dsearchn(X, centrepoint);
-%     
-%     % Return point in [i,j,k] notation
-%     [i, j, k] = ind2sub(size(thick_slice), all_points(nearest_point_index_index));
-%     relative_top_of_trachea = [i + i_min - 1, j, k];
 end
 
 function centroid = GetCentroid(indices, image_size)
@@ -264,7 +241,7 @@ function result = ReduceImageToCentralComponents(image_to_reduce, slices_per_ste
         if slices_per_step == 1
             connected_components = bwconncomp(slice, 8); % 2D connected components
         else
-            connected_components = bwconncomp(slice, 26); % 3D connected components
+            connected_components = bwconncomp(slice, 6); % 3D connected components
         end
         stats = regionprops(connected_components, 'BoundingBox');
         
@@ -305,30 +282,17 @@ function thick_slice = FillHoles(thick_slice)
     end
 end
 
-function result = FindLargestComponent(mask , top_of_trachea)
+function result = FindLargestComponent(mask, top_of_trachea)
     top_of_trachea_index = sub2ind(size(mask),top_of_trachea(1),top_of_trachea(2),top_of_trachea(3));
     result = false(size(mask));
-    connected_components = bwconncomp(mask, 26);
+    connected_components = bwconncomp(mask, 6);
     num_pixels = cellfun(@numel, connected_components.PixelIdxList);
     [~, sorted_largest_areas_indices] = sort(num_pixels, 'descend');
+    voxels = connected_components.PixelIdxList{sorted_largest_areas_indices(1)};
     sort_index = 1;
-    voxels = connected_components.PixelIdxList{sorted_largest_areas_indices(sort_index)};
     while isempty(find(voxels==top_of_trachea_index))
         sort_index = sort_index + 1;
         voxels = connected_components.PixelIdxList{sorted_largest_areas_indices(sort_index)};
     end
     result(voxels) = true;
-end
-
-function result = DeleteSmallComponent(mask)
-result = logical(mask);
-connected_components = bwconncomp(mask, 26);
-num_pixels = cellfun(@numel, connected_components.PixelIdxList);
-[~, sorted_largest_areas_indices] = sort(num_pixels, 'descend');
-voxels = connected_components.PixelIdxList{sorted_largest_areas_indices(end)};
-result(voxels) = false;
-for i=1:4
-voxels = connected_components.PixelIdxList{sorted_largest_areas_indices(end-i)};
-result(voxels) = true;
-end
 end
