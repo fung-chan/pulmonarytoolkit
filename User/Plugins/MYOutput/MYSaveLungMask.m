@@ -60,15 +60,32 @@ classdef MYSaveLungMask < PTKPlugin
                     current_image1(k,:) = current_image(x_size-k+1,:);
                 end
                 save_mask_path = fullfile(save_full_path,'LungMask');
+%                 if i-1<=9
+%                     save_image_name = strcat(save_mask_path,'000',num2str(i-1),'.jpg');
+%                 elseif i-1>9&&i-1<=99
+%                     save_image_name = strcat(save_mask_path,'00',num2str(i-1),'.jpg');
+%                 elseif i-1>99&&i-1<=999
+%                     save_image_name = strcat(save_mask_path,'0',num2str(i-1),'.jpg');
+%                 end
+%                 current_image1 = uint8(current_image1);
+%                 imwrite(current_image1,save_image_name);%, 'Mode', 'lossless');
                 if i-1<=9
-                    save_image_name = strcat(save_mask_path,'000',num2str(i-1),'.jpg');
+                    save_image_name = strcat(save_mask_path,'000',num2str(i-1),'.tiff');
                 elseif i-1>9&&i-1<=99
-                    save_image_name = strcat(save_mask_path,'00',num2str(i-1),'.jpg');
+                    save_image_name = strcat(save_mask_path,'00',num2str(i-1),'.tiff');
                 elseif i-1>99&&i-1<=999
-                    save_image_name = strcat(save_mask_path,'0',num2str(i-1),'.jpg');
+                    save_image_name = strcat(save_mask_path,'0',num2str(i-1),'.tiff');
                 end
+                % this output format is for visulization
                 current_image1 = uint8(current_image1);
-                imwrite(current_image1,save_image_name, 'Mode', 'lossless');
+                current_image2 = current_image1;
+                current_image2(current_image1==1) = 17;
+                current_image2(current_image1==2) = 5;
+
+                %current_image2(current_image1==1) = 5;
+                %current_image2(current_image1==2) = 17;
+                imwrite(current_image2,save_image_name);% for visualiztion
+
             end
             results = lung_results.Copy;
         end

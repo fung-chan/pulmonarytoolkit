@@ -38,7 +38,7 @@ classdef PTKTreeUtilities < handle
         % Returns a branch which is the ancestor of both specifed branches
         function ancestor = FindCommonAncestor(branch_1, branch_2)
             ancestor = branch_1;
-            while ~ancestor.ContainsBranch(branch_2);
+            while ~ancestor.ContainsBranch(branch_2) || isempty(ancestor.Children); % ****added or case**** 
                 ancestor = ancestor.Parent;
                 if isempty(ancestor)
                     return

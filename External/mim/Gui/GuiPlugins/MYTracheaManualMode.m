@@ -1,5 +1,6 @@
-classdef MYLungSegmentationManualMode < PTKGuiPlugin
-    % PTKSetDeveloperMode. Gui Plugin for enabling or disabling developer mode
+classdef MYTracheaManualMode < MimGuiPlugin
+    % MYTracheaManualMode. Gui Plugin for enabling or disabling mode to
+    % manually find the trachea location
     %
     %     You should not use this class within your own code. It is intended to
     %     be used by the gui of the Pulmonary Toolkit.
@@ -13,16 +14,17 @@ classdef MYLungSegmentationManualMode < PTKGuiPlugin
     %    
     
     properties
-        ButtonText = 'Lung Seg Control'
-        SelectedText = 'Lung Seg Control off'
-        ToolTip = 'Enables or disabled manual control of lung segmentation mode'
-        Category = 'Lung segmentation manual control tools'
+        ButtonText = 'Auto Trachea'
+        SelectedText = 'Manual Trachea'
+        ToolTip = 'Enables or disables mode to manually find the trachea location'
+        Category = 'Trachea location manual control tools'
         Visibility = 'Always'
-        Mode = 'View'
+%         Mode = 'View'
+        Mode = 'Toolbar'
 
         HidePluginInDisplay = false
         PTKVersion = '1'
-        ButtonWidth = 4
+        ButtonWidth = 6
         ButtonHeight = 1
         
         Icon = 'developer_tools.png'
@@ -30,17 +32,17 @@ classdef MYLungSegmentationManualMode < PTKGuiPlugin
     end
     
     methods (Static)
-        function RunGuiPlugin(ptk_gui_app)
+        function RunGuiPlugin(gui_app)
             % Toggles developer mode
-            ptk_gui_app.LungSegmentationMode = ~ptk_gui_app.LungSegmentationMode;
+            gui_app.TracheaManualMode = ~gui_app.TracheaManualMode;
         end
         
-        function enabled = IsEnabled(ptk_gui_app)
+        function enabled = IsEnabled(gui_app)
             enabled = true;
         end
         
-        function is_selected = IsSelected(ptk_gui_app)
-            is_selected = ptk_gui_app.LungSegmentationMode;
+        function is_selected = IsSelected(gui_app)
+            is_selected = gui_app.TracheaManualMode;
         end
     end
 end
