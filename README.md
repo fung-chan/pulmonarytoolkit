@@ -14,6 +14,7 @@ This software requires:
  * A C++ compiler is needed for a number of the segmentation routines
  * Matlab Image Processing Toolbox
  * Matlab Statistics and Machine Learning toolbox is currently needed to support some of the analtics (specifically prctile)
+ * MetaImageIO Matlab Add-On (for export of metaimage files)
 
 
 

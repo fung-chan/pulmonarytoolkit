@@ -58,7 +58,7 @@ classdef MYSaveLungMesh < PTKPlugin
             lung_names = {'Right', 'Left'};
             lung_index_colours = [1, 2];
 
-            coordinate_system = PTKCoordinateSystem.DicomUntranslated;
+            coordinate_system = PTKCoordinateSystem.Dicom;
             template_image = lungs;
 
             for lung_index = 1 : 2
