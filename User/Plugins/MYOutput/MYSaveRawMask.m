@@ -46,7 +46,7 @@ classdef MYSaveRawMask < PTKPlugin
             lobes = dataset.GetResult('PTKLobes');
             
             % Save raw image as mha file
-            raw_image = raw.RawImage;
+            raw_image = int16(raw.RawImage); % Make sure raw image is always int16
             raw_image_rotate = permute(raw_image, [2,1,3]); % Rotate images
             [filename, pathname] = uiputfile('*.mha', 'Save the raw metaimage file as');
             raw_filename = extractBefore(filename, ".");
