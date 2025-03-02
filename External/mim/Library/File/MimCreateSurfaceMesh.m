@@ -88,7 +88,13 @@ function MimCreateSurfaceMesh(filepath, filename, segmentation, smoothing_size, 
         [fv, ~] = MimCreateSurfaceFromSegmentation(segmentation, smoothing_size, small_structures, label, coordinate_system, template_image, limit_to_one_component_per_index, minimum_component_volume_mm3, reporting);
         
         current_filename = filename;
-        stlwrite(fullfile(filepath, current_filename), fv);
+        
+        [~, ~, ext] = fileparts(current_filename);
+        if strcmpi(ext,'.ply') == 1
+            plywrite(fullfile(filepath, current_filename), fv.faces, fv.vertices); % Option to write ply files
+        else
+            stlwrite(fullfile(filepath, current_filename), fv);
+        end
     end
     
     reporting.UpdateProgressValue(100);
