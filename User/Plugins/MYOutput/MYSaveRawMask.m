@@ -21,8 +21,8 @@ classdef MYSaveRawMask < PTKPlugin
     %     installed from Add-Ons manager
     
     properties
-        ButtonText = 'Save mha Raw and Masks'
-        ToolTip = 'Saves raw image, lung and lobe masks as mha files'
+        ButtonText = 'Save raw, lung & lobe mha + stl files'
+        ToolTip = 'Saves raw image, lung and lobe masks as mha and stl files'
         Category = 'Export'
 
         AllowResultsToBeCached = true
@@ -40,17 +40,28 @@ classdef MYSaveRawMask < PTKPlugin
         function results = RunPlugin(dataset, reporting)
             reporting.ShowProgress('Saving raw image and masks');
             
-            % Get raw image, lung and lobe segmentations
+            %% Get raw image, lung and lobe segmentations
             raw = dataset.GetResult('PTKOriginalImage');
             lungs = dataset.GetResult('PTKLeftAndRightLungs');
             lobes = dataset.GetResult('PTKLobes');
             
-            % Save raw image as mha file
+            [raw_filename, pathname] = uiputfile('*.*', 'Name of subject and root directory to save files');
+%             raw_filename = extractBefore(filename, ".");
+            
+            lung_folder = fullfile(pathname,'Lung');
+            if ~exist(lung_folder, 'dir')
+                mkdir(lung_folder);
+            end
+
+            lobe_folder = fullfile(pathname,'Lobes');
+            if ~exist(lobe_folder, 'dir')
+                mkdir(lobe_folder);
+            end
+
+            %% Save raw image as mha file
             raw_image = int16(raw.RawImage); % Make sure raw image is always int16
             raw_image_rotate = permute(raw_image, [2,1,3]); % Rotate images
-            [filename, pathname] = uiputfile('*.mha', 'Save the raw metaimage file as');
-            raw_filename = extractBefore(filename, ".");
-
+            
             if isfield(raw.MetaHeader,'RescaleIntercept')==1
                 raw_image_rotate = raw_image_rotate * raw.RescaleSlope + raw.RescaleIntercept;
             end
@@ -71,9 +82,9 @@ classdef MYSaveRawMask < PTKPlugin
             meta_struct.DimSize = raw.OriginalImageSize;
             meta_struct.Offset(3) = meta_struct.Offset(3)+(meta_struct.DimSize(3)*meta_struct.ElementSpacing(3));
             
-            metaimageio.write(fullfile(pathname,strcat(raw_filename,'.mha')),raw_image_rotate,meta_struct);
+            metaimageio.write(fullfile(lung_folder,strcat(raw_filename,'.mha')),raw_image_rotate,meta_struct);
             
-            % Save lung mask
+            %% Save lung mask
             lung_raw = lungs.RawImage;            
             full_lung = zeros(lungs.OriginalImageSize);
             image_size = lungs.ImageSize;
@@ -88,10 +99,44 @@ classdef MYSaveRawMask < PTKPlugin
             meta_struct.CompressedData = 1;
             meta_struct.BinaryData = 1;
             
-            metaimageio.write(fullfile(pathname,strcat(raw_filename,'_lungmask.mha')),full_lung_combined,meta_struct);
-            metaimageio.write(fullfile(pathname,strcat(raw_filename,'_rightleftmask.mha')),full_lung_rotate,meta_struct);
+            metaimageio.write(fullfile(lung_folder,strcat(raw_filename,'_lungmask.mha')),full_lung_combined,meta_struct);
+            metaimageio.write(fullfile(lung_folder,strcat(raw_filename,'_rightleftmask.mha')),full_lung_rotate,meta_struct);
+            
+            %% Save lung mesh
+            lungmesh_folder = fullfile(lung_folder,'Lung_mesh');
+            if ~exist(lungmesh_folder, 'dir')
+                mkdir(lungmesh_folder);
+            end
 
-            % Save lobe mask
+            lung_names = {'Right', 'Left'};
+            lung_index_colours = [1, 2];
+
+            coordinate_system = PTKCoordinateSystem.Dicom;
+            template_image = lungs;
+
+            for lung_index = 1:2
+                reporting.UpdateProgressStage((lung_index-1), 2);
+                
+                current_lung = lungs.Copy;
+                current_lung.ChangeRawImage(lungs.RawImage == lung_index_colours(lung_index));
+                current_lung = PTKFillHolesInImage(current_lung);
+                
+                smoothing_size = 3;
+                lungmesh_name = strcat(raw_filename,'_lungSurfaceMesh_',lung_names{lung_index},'.stl');
+%                 lungmesh_name2 = strcat(raw_filename,'_lungSurfaceMesh_',lung_names{lung_index},'.ply');
+                
+                current_lung.AddBorder(6);
+                reporting.PushProgress;
+                
+                small_structures = false;
+                MimCreateSurfaceMesh(lungmesh_folder, lungmesh_name, current_lung, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+%                 MimCreateSurfaceMesh(lungmesh_folder, lungmesh_name2, current_lung, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+                
+                reporting.PopProgress;
+            end
+
+
+            %% Save lobe mask
             lobe_raw = lobes.RawImage;            
             full_lobe = zeros(lobes.OriginalImageSize);
             image_size = lobes.ImageSize;
@@ -101,8 +146,41 @@ classdef MYSaveRawMask < PTKPlugin
             
             full_lobe_rotate = permute(full_lobe, [2,1,3]);
 
-            metaimageio.write(fullfile(pathname,strcat(raw_filename,'_lobemask.mha')),full_lobe_rotate,meta_struct);
+            metaimageio.write(fullfile(lobe_folder,strcat(raw_filename,'_lobemask.mha')),full_lobe_rotate,meta_struct);
+            
+            %% Save lobe mesh
+            lobemesh_folder = fullfile(lobe_folder,'Lobe_mesh');
+            if ~exist(lobemesh_folder, 'dir')
+                mkdir(lobemesh_folder);
+            end
 
+            lobe_names = {'RU', 'RM', 'RL', 'LU', 'LL'};
+            lobe_index_colours = [1, 2, 4, 5, 6];
+
+            coordinate_system = MimCoordinateSystem.Dicom;
+            template_image = lobes;
+
+            for lobe_index = 1:5
+                reporting.UpdateProgressStage((lobe_index-1), 5);
+                
+                current_lobe = lobes.Copy;
+                current_lobe.ChangeRawImage(lobes.RawImage == lobe_index_colours(lobe_index));
+                current_lobe = PTKFillHolesInImage(current_lobe);
+                
+                smoothing_size = 3;
+                lobemesh_name = strcat(raw_filename,'_LobeSurfaceMesh_',lobe_names{lobe_index},'.stl');
+%                 lobemesh_name2 = strcat(raw_filename,'_LobeSurfaceMesh_',lobe_names{lobe_index},'.ply');
+
+                current_lobe.AddBorder(6);
+                reporting.PushProgress;
+                
+                small_structures = false;
+                MimCreateSurfaceMesh(lobemesh_folder, lobemesh_name, current_lobe, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+%                 MimCreateSurfaceMesh(lobemesh_folder, lobemesh_name2, current_lobe, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+                
+                reporting.PopProgress;
+            end
+            
             results = raw;
             reporting.UpdateProgressValue(100);
             reporting.CompleteProgress;
