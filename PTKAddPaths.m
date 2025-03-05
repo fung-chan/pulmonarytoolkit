@@ -77,6 +77,11 @@ function PTKAddPaths(varargin)
         path_folders{end + 1} = fullfile('External', 'gerardus', 'matlab', 'PointsToolbox');
         path_folders{end + 1} = fullfile('External', 'stlwrite');
         path_folders{end + 1} = fullfile('External', 'plywrite');
+        path_folders{end + 1} = fullfile('External', 'ggremesh');
+        path_folders{end + 1} = fullfile('External', 'ggremesh', 'geogram');
+        path_folders{end + 1} = fullfile('External', 'ggremesh', 'geogram', 'lin64');
+        path_folders{end + 1} = fullfile('External', 'ggremesh', 'geogram', 'mac64');
+        path_folders{end + 1} = fullfile('External', 'ggremesh', 'geogram', 'win64');
         path_folders{end + 1} = fullfile('External', 'npReg');
         path_folders{end + 1} = fullfile('External', 'depmat');
         path_folders{end + 1} = fullfile('External', 'MatlabWebSocket', 'src');
