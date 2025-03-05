@@ -123,14 +123,14 @@ classdef MYSaveRawMask < PTKPlugin
                 
                 smoothing_size = 3;
                 lungmesh_name = strcat(raw_filename,'_lungSurfaceMesh_',lung_names{lung_index},'.stl');
-%                 lungmesh_name2 = strcat(raw_filename,'_lungSurfaceMesh_',lung_names{lung_index},'.ply');
+                lungmesh_name2 = strcat(raw_filename,'_lungSurfaceMesh_',lung_names{lung_index},'.ply');
                 
                 current_lung.AddBorder(6);
                 reporting.PushProgress;
                 
                 small_structures = false;
                 MimCreateSurfaceMesh(lungmesh_folder, lungmesh_name, current_lung, smoothing_size, small_structures, coordinate_system, template_image, reporting)
-%                 MimCreateSurfaceMesh(lungmesh_folder, lungmesh_name2, current_lung, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+                MimCreateSurfaceMesh(lungmesh_folder, lungmesh_name2, current_lung, smoothing_size, small_structures, coordinate_system, template_image, reporting)
                 
                 reporting.PopProgress;
             end
@@ -169,14 +169,14 @@ classdef MYSaveRawMask < PTKPlugin
                 
                 smoothing_size = 3;
                 lobemesh_name = strcat(raw_filename,'_LobeSurfaceMesh_',lobe_names{lobe_index},'.stl');
-%                 lobemesh_name2 = strcat(raw_filename,'_LobeSurfaceMesh_',lobe_names{lobe_index},'.ply');
+                lobemesh_name2 = strcat(raw_filename,'_LobeSurfaceMesh_',lobe_names{lobe_index},'.ply');
 
                 current_lobe.AddBorder(6);
                 reporting.PushProgress;
                 
                 small_structures = false;
                 MimCreateSurfaceMesh(lobemesh_folder, lobemesh_name, current_lobe, smoothing_size, small_structures, coordinate_system, template_image, reporting)
-%                 MimCreateSurfaceMesh(lobemesh_folder, lobemesh_name2, current_lobe, smoothing_size, small_structures, coordinate_system, template_image, reporting)
+                MimCreateSurfaceMesh(lobemesh_folder, lobemesh_name2, current_lobe, smoothing_size, small_structures, coordinate_system, template_image, reporting)
                 
                 reporting.PopProgress;
             end
