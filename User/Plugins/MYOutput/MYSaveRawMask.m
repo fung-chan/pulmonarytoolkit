@@ -21,8 +21,8 @@ classdef MYSaveRawMask < PTKPlugin
     %     installed from Add-Ons manager
     
     properties
-        ButtonText = 'Save raw, lung & lobe mha + stl files'
-        ToolTip = 'Saves raw image, lung and lobe masks as mha and stl files'
+        ButtonText = 'Save mha, stl & ply files for lung & lobes'
+        ToolTip = 'Saves raw image, lung and lobe masks as mha, stl and ply files'
         Category = 'Export'
 
         AllowResultsToBeCached = true
