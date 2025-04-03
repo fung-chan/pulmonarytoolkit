@@ -15,9 +15,14 @@ This software requires:
  * Matlab Image Processing Toolbox
  * Matlab Statistics and Machine Learning toolbox is currently needed to support some of the analtics (specifically prctile)
  * MetaImageIO Matlab Add-On (for export of metaimage files)
-
-
-
+ * Geogram binary 
+ 
+Geogram Linux64 compilation guide (first time only):
+ * Download or clone geogram (https://github.com/BrunoLevy/geogram/releases/tag/v1.9.3)
+ * Compilation guide for x86_Linux (https://github.com/BrunoLevy/geogram/wiki/compiling_Linux)
+ * Copy vorpalite binary from build/Linux64-gcc-dynamic-Release/bin to pulmonarytoolkit External/ggremesh/geogram/lin64
+ 
+ 
 This software is intended for research purposes only. It is not intended for clinical use.
 
 
