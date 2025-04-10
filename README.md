@@ -22,7 +22,10 @@ Geogram Linux64 compilation guide (first time only):
  * Compilation guide for x86_Linux (https://github.com/BrunoLevy/geogram/wiki/compiling_Linux)
  * Copy vorpalite binary from build/Linux64-gcc-dynamic-Release/bin to pulmonarytoolkit External/ggremesh/geogram/lin64
  
- 
+Running MATLAB with geogram the following commands should be used to ensure the correct glibc libraries are used:
+ * export LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6
+ * matlab -softwareopengl
+   
 This software is intended for research purposes only. It is not intended for clinical use.
 
 
