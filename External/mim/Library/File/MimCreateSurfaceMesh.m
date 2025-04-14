@@ -88,7 +88,22 @@ function MimCreateSurfaceMesh(filepath, filename, segmentation, smoothing_size, 
         [fv, ~] = MimCreateSurfaceFromSegmentation(segmentation, smoothing_size, small_structures, label, coordinate_system, template_image, limit_to_one_component_per_index, minimum_component_volume_mm3, reporting);
         
         current_filename = filename;
-        stlwrite(fullfile(filepath, current_filename), fv);
+        
+        [~, ~, ext] = fileparts(current_filename);
+        if strcmpi(ext,'.ply') == 1
+            V = fv.vertices;
+            F = fv.faces;
+            optionStruct1.nb_pts=round(size(V,1)*0.05); % 5 percent of original points
+%             optionStruct1.disp_on=1;
+%             optionStruct1.pre.max_hole_area=1; %Max hole area for pre-processing step
+%             optionStruct1.pre.max_hole_edges=50; %Max number of hole edges for pre-processing step
+%             optionStruct1.post.max_hole_area=100; %Max hole area for pre-processing step
+%             optionStruct1.post.max_hole_edges=0; %Max number of hole edges for pre-processing step
+            [fv_reduced.faces,fv_reduced.vertices]=ggremesh_modified(F,V,optionStruct1); % Re-mesh
+            plywrite(fullfile(filepath, current_filename), fv_reduced.faces, fv_reduced.vertices); % Option to write ply files
+        else
+            stlwrite(fullfile(filepath, current_filename), fv);
+        end
     end
     
     reporting.UpdateProgressValue(100);
